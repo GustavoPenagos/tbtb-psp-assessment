@@ -85,6 +85,11 @@
 - **Decisión del desarrollador:** Aceptada e implementada.
 - **Motivo de la decisión:** Desacoplar estrictamente el contrato público de la API de la estructura interna de persistencia. Se implementó `MappingProfile` con mapeos bidireccionales (`PatientRegisterRequestDto` $\leftrightarrow$ `Patient`, `ContactCreateRequestDto` $\leftrightarrow$ `Contact`, `AuditLog` $\rightarrow$ `AuditLogResponseDto`), asegurando que ningún controlador o servicio de aplicación asigne propiedades manualmente.
 
+### Decisión 10 — Modularización de Inyección de Dependencias en `DependencyInjection/`
+- **Propuesto por:** Desarrollador.
+- **Decisión del desarrollador:** Aceptada e implementada.
+- **Motivo de la decisión:** Reducir la sobrecarga en `Program.cs` y cumplir con los principios de Clean Architecture y Single Responsibility Principle. Se extrajo la configuración de contenedores IoC hacia una clase de extensión dedicada `WebApi.DependencyInjection.DependencyInjection` en la carpeta `DependencyInjection/`, organizando los servicios por capa (`AddInfrastructureServices`, `AddApplicationServices`, `AddWebApiServices`, `AddSwaggerDocumentation` y `AddCorsPolicy`), dejando `Program.cs` enfocado exclusivamente en la tubería de middleware HTTP.
+
 ---
 
 ## 3. Matriz de Cumplimiento de Buenas Prácticas y Restricciones del PDF
