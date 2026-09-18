@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- SCRIPT 02: PROCEDIMIENTOS ALMACENADOS TRANSACCIONALES (SP)
 -- Programa: Acompañamiento a Pacientes (PSP)
 -- Autor: Gustavo Penagos
@@ -46,6 +46,18 @@ BEGIN
         )
         BEGIN
             THROW 50001, 'Patient with this country and document number already exists.', 1;
+        END;
+
+        -- Validar unicidad de correo electrónico
+        IF EXISTS (SELECT 1 FROM dbo.patients WHERE email = @Email)
+        BEGIN
+            THROW 50004, 'Patient with this email address already exists.', 1;
+        END;
+
+        -- Validar unicidad de teléfono (formato E.164)
+        IF @Phone IS NOT NULL AND EXISTS (SELECT 1 FROM dbo.patients WHERE phone = @Phone)
+        BEGIN
+            THROW 50005, 'Patient with this phone number already exists.', 1;
         END;
 
         SET @NewPatientId = NEWSEQUENTIALID();
@@ -198,6 +210,10 @@ BEGIN
         IF @ExpiresAt < SYSUTCDATETIME()
             THROW 50012, 'Registration token has expired.', 1;
 
+        -- Validar que el correo no pertenezca a un paciente existente
+        IF EXISTS (SELECT 1 FROM dbo.patients WHERE email = @Email)
+            THROW 50004, 'Patient with this email address already exists.', 1;
+
         -- Crear registro preliminar de paciente en estado PENDING
         SET @PatientId = NEWSEQUENTIALID();
 
@@ -276,6 +292,12 @@ BEGIN
         )
         BEGIN
             THROW 50001, 'Patient with this country and document number already exists.', 1;
+        END;
+
+        -- Validar unicidad de teléfono
+        IF @Phone IS NOT NULL AND EXISTS (SELECT 1 FROM dbo.patients WHERE phone = @Phone AND id <> @PatientId)
+        BEGIN
+            THROW 50005, 'Patient with this phone number already exists.', 1;
         END;
 
         -- Actualizar datos del paciente a ACTIVE

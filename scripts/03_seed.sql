@@ -226,44 +226,49 @@ BEGIN
     WHILE @i <= 400
     BEGIN
         DECLARE @DocNum NVARCHAR(20) = CAST(200000000 + @i AS NVARCHAR(20));
+        DECLARE @ModCountry INT = @i % 3;
+        DECLARE @Country CHAR(2);
+        DECLARE @DocType NVARCHAR(10);
+        DECLARE @Phone NVARCHAR(20);
+        DECLARE @City NVARCHAR(100);
 
-        IF NOT EXISTS (SELECT 1 FROM dbo.patients WHERE document_number = @DocNum)
+        IF @ModCountry = 0
         BEGIN
-            DECLARE @ModCountry INT = @i % 3;
-            DECLARE @Country CHAR(2);
-            DECLARE @DocType NVARCHAR(10);
-            DECLARE @Phone NVARCHAR(20);
-            DECLARE @City NVARCHAR(100);
+            SET @Country = 'CO';
+            SET @DocType = 'CC';
+            SET @Phone = '+573' + RIGHT('00000000' + CAST(10000000 + @i AS VARCHAR(10)), 9);
+            SET @City = CASE @i % 4 WHEN 0 THEN 'Bogotá' WHEN 1 THEN 'Medellín' WHEN 2 THEN 'Cali' ELSE 'Barranquilla' END;
+        END
+        ELSE IF @ModCountry = 1
+        BEGIN
+            SET @Country = 'PE';
+            SET @DocType = 'DNI';
+            SET @Phone = '+519' + RIGHT('0000000' + CAST(8000000 + @i AS VARCHAR(10)), 8);
+            SET @City = CASE @i % 3 WHEN 0 THEN 'Lima' WHEN 1 THEN 'Arequipa' ELSE 'Trujillo' END;
+        END
+        ELSE
+        BEGIN
+            SET @Country = 'EC';
+            SET @DocType = 'CEDULA';
+            SET @Phone = '+5939' + RIGHT('0000000' + CAST(9000000 + @i AS VARCHAR(10)), 8);
+            SET @City = CASE @i % 2 WHEN 0 THEN 'Quito' ELSE 'Guayaquil' END;
+        END;
 
-            IF @ModCountry = 0
-            BEGIN
-                SET @Country = 'CO';
-                SET @DocType = 'CC';
-                SET @Phone = '+573' + RIGHT('00000000' + CAST(10000000 + @i AS VARCHAR(10)), 9);
-                SET @City = CASE @i % 4 WHEN 0 THEN 'Bogotá' WHEN 1 THEN 'Medellín' WHEN 2 THEN 'Cali' ELSE 'Barranquilla' END;
-            END
-            ELSE IF @ModCountry = 1
-            BEGIN
-                SET @Country = 'PE';
-                SET @DocType = 'DNI';
-                SET @Phone = '+519' + RIGHT('0000000' + CAST(8000000 + @i AS VARCHAR(10)), 8);
-                SET @City = CASE @i % 3 WHEN 0 THEN 'Lima' WHEN 1 THEN 'Arequipa' ELSE 'Trujillo' END;
-            END
-            ELSE
-            BEGIN
-                SET @Country = 'EC';
-                SET @DocType = 'CEDULA';
-                SET @Phone = '+5939' + RIGHT('0000000' + CAST(9000000 + @i AS VARCHAR(10)), 8);
-                SET @City = CASE @i % 2 WHEN 0 THEN 'Quito' ELSE 'Guayaquil' END;
-            END;
+        DECLARE @FnIndex INT = (@i % 20) + 1;
+        DECLARE @LnIndex INT = ((@i * 7) % 20) + 1;
+        DECLARE @Fn NVARCHAR(50) = (SELECT name FROM @FirstNames WHERE idx = @FnIndex);
+        DECLARE @Ln NVARCHAR(50) = (SELECT name FROM @LastNames WHERE idx = @LnIndex);
+        DECLARE @FullPatientName NVARCHAR(200) = @Fn + ' ' + @Ln;
+        DECLARE @PatientEmail NVARCHAR(150) = LOWER(@Fn) + '.' + LOWER(@Ln) + CAST(@i AS NVARCHAR(10)) + '@psp-paciente.org';
 
-            DECLARE @FnIndex INT = (@i % 20) + 1;
-            DECLARE @LnIndex INT = ((@i * 7) % 20) + 1;
-            DECLARE @Fn NVARCHAR(50) = (SELECT name FROM @FirstNames WHERE idx = @FnIndex);
-            DECLARE @Ln NVARCHAR(50) = (SELECT name FROM @LastNames WHERE idx = @LnIndex);
-            DECLARE @FullPatientName NVARCHAR(200) = @Fn + ' ' + @Ln;
-            DECLARE @PatientEmail NVARCHAR(150) = LOWER(@Fn) + '.' + LOWER(@Ln) + CAST(@i AS NVARCHAR(10)) + '@psp-paciente.org';
-            
+        -- Verificación estricta: ninguno de los tres campos (documento, email, teléfono) puede repetirse
+        IF NOT EXISTS (
+            SELECT 1 FROM dbo.patients 
+            WHERE document_number = @DocNum 
+               OR email = @PatientEmail 
+               OR phone = @Phone
+        )
+        BEGIN
             DECLARE @TreatDate DATE = DATEADD(DAY, -((@i * 3) % 180), '2026-09-01');
             DECLARE @FollowDays INT = CASE @i % 4 WHEN 0 THEN 15 WHEN 1 THEN 30 WHEN 2 THEN 45 ELSE 60 END;
             DECLARE @PatientStatus NVARCHAR(20) = CASE WHEN @i % 20 = 0 THEN 'UNREACHABLE' WHEN @i % 40 = 0 THEN 'PENDING' ELSE 'ACTIVE' END;

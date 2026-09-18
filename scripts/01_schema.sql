@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- SCRIPT 01: CREACIÓN DE TABLAS, RESTRICCIONES E ÍNDICES
 -- Programa: Acompañamiento a Pacientes (PSP)
 -- Autor: Gustavo Penagos
@@ -139,6 +139,23 @@ BEGIN
     CREATE UNIQUE NONCLUSTERED INDEX UX_patient_doc_filtered
     ON dbo.patients (country_code, document_type, document_number)
     WHERE document_type IS NOT NULL AND document_number IS NOT NULL;
+END;
+GO
+
+-- Clave única para email de paciente (cada paciente debe ser único)
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_patients_email' AND object_id = OBJECT_ID('dbo.patients'))
+BEGIN
+    CREATE UNIQUE NONCLUSTERED INDEX UX_patients_email
+    ON dbo.patients (email);
+END;
+GO
+
+-- Clave única filtrada para teléfono de paciente (formato E.164 único, permite NULL en paso 1)
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'UX_patients_phone_filtered' AND object_id = OBJECT_ID('dbo.patients'))
+BEGIN
+    CREATE UNIQUE NONCLUSTERED INDEX UX_patients_phone_filtered
+    ON dbo.patients (phone)
+    WHERE phone IS NOT NULL;
 END;
 GO
 
