@@ -1,0 +1,21 @@
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Angular & Node
+node_modules/
+dist/
+.angular/
+.npm/
+npm-debug.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.DS_Store
+Thumbs.db
