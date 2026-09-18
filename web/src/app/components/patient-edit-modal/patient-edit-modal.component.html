@@ -1,0 +1,111 @@
+@if (isOpen && patient) {
+  <div class="modal-backdrop" (click)="close()" role="dialog" aria-modal="true">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-card__header">
+        <div>
+          <span class="badge badge--blue">CA-3 • Edición Auditada GxP</span>
+          <h3 class="modal-card__title">Modificar Datos del Paciente</h3>
+          <p class="modal-card__subtitle">Paciente: <strong>{{ patient.fullName }}</strong> ({{ patient.countryCode }})</p>
+        </div>
+        <button type="button" class="btn-close" (click)="close()" aria-label="Cerrar modal">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" class="modal-card__body">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editPhone" class="form-label">Teléfono (E.164) <span class="required">*</span></label>
+            <input
+              id="editPhone"
+              type="text"
+              class="form-control"
+              formControlName="phone"
+              placeholder="+573001234567"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="editCity" class="form-label">Ciudad de Residencia <span class="required">*</span></label>
+            <input
+              id="editCity"
+              type="text"
+              class="form-control"
+              formControlName="city"
+              placeholder="Bogotá / Lima / Quito"
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editFollowUp" class="form-label">Días de Seguimiento <span class="required">*</span></label>
+            <input
+              id="editFollowUp"
+              type="number"
+              min="1"
+              max="365"
+              class="form-control"
+              formControlName="followUpDays"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="editStatus" class="form-label">Estado Clínico <span class="required">*</span></label>
+            <select id="editStatus" class="form-select" formControlName="status">
+              @for (st of statuses; track st) {
+                <option [value]="st">{{ st }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <!-- MOTIVO OBLIGATORIO CON CONTADOR DINÁMICO >= 10 CARACTERES -->
+        <div class="form-group form-group--highlight">
+          <div class="label-with-counter">
+            <label for="editReason" class="form-label">
+              Motivo Regulatorio del Cambio <span class="required">*</span>
+            </label>
+            <span
+              class="char-counter"
+              [class.char-counter--valid]="isReasonValid"
+              [class.char-counter--invalid]="!isReasonValid"
+            >
+              {{ reasonLength }} / 10 caracteres mín.
+            </span>
+          </div>
+          <textarea
+            id="editReason"
+            rows="3"
+            class="form-control"
+            formControlName="reason"
+            placeholder="Describa el motivo clínico o administrativo de la actualización (mínimo 10 caracteres obligatorios)..."
+            maxlength="300"
+          ></textarea>
+          @if (!isReasonValid && form.get('reason')?.touched) {
+            <div class="form-error">
+              El motivo es obligatorio y debe tener al menos 10 caracteres para cumplir con ALCOA+ / 21 CFR Part 11.
+            </div>
+          }
+        </div>
+
+        <div class="modal-card__footer">
+          <button type="button" class="btn btn--secondary" (click)="close()" [disabled]="isSubmitting">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            class="btn btn--primary"
+            [disabled]="form.invalid || !isReasonValid || isSubmitting"
+          >
+            @if (isSubmitting) {
+              <span class="spinner"></span> Guardando...
+            } @else {
+              Actualizar Paciente
+            }
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

@@ -1,0 +1,138 @@
+<app-toast></app-toast>
+
+@if (isPublicRoute) {
+  <!-- RUTA PÚBLICA AISLADA DE AUTORREGISTRO -->
+  <router-outlet></router-outlet>
+} @else {
+  <!-- LAYOUT PRINCIPAL INSTITUCIONAL CLÍNICO -->
+  <div class="app-layout">
+    <!-- HEADER CLÍNICO -->
+    <header class="app-header">
+      <div class="app-header__brand">
+        <div class="brand-badge">PSP</div>
+        <div>
+          <h1 class="brand-name">TBTB Global Healthcare</h1>
+          <span class="brand-tagline">Programa de Soporte al Paciente • CO / PE / EC</span>
+        </div>
+      </div>
+
+      <div class="app-header__status">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">SQL Server Conectado</span>
+        </div>
+        <div class="regulatory-pill">
+          GxP Compliant • 21 CFR Part 11
+        </div>
+        <div class="user-chip">
+          <span class="user-avatar">GP</span>
+          <div class="user-info">
+            <span class="user-name">Gustavo Penagos</span>
+            <span class="user-role">Gestor Regional PSP</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- NAVEGACIÓN POR TABS (ASIDES) -->
+    <nav class="app-nav">
+      <button
+        type="button"
+        class="nav-tab"
+        [class.nav-tab--active]="activeTab === 'directory'"
+        (click)="setTab('directory')"
+      >
+        <span class="tab-icon">👥</span>
+        Directorio de Pacientes
+      </button>
+
+      <button
+        type="button"
+        class="nav-tab"
+        [class.nav-tab--active]="activeTab === 'register'"
+        (click)="setTab('register')"
+      >
+        <span class="tab-icon">➕</span>
+        Registrar Paciente (CA-1)
+      </button>
+
+      <button
+        type="button"
+        class="nav-tab"
+        [class.nav-tab--active]="activeTab === 'audit'"
+        (click)="setTab('audit')"
+      >
+        <span class="tab-icon">📊</span>
+        Trazabilidad & Auditoría (CA-3)
+      </button>
+    </nav>
+
+    <!-- CONTENEDOR PRINCIPAL DE ASIDES -->
+    <main class="app-main">
+      @switch (activeTab) {
+        @case ('directory') {
+          <app-patient-directory
+            (openContactModal)="openContact($event)"
+            (openEditModal)="openEdit($event)"
+            (openAuditViewer)="openAudit($event)"
+          ></app-patient-directory>
+        }
+        @case ('register') {
+          <app-patient-register
+            (patientRegistered)="onPatientRegistered()"
+          ></app-patient-register>
+        }
+        @case ('audit') {
+          @if (selectedPatientForAudit) {
+            <app-audit-viewer
+              [patient]="selectedPatientForAudit"
+              (close)="activeTab = 'directory'"
+              (openCorrectionModal)="openCorrection($event)"
+            ></app-audit-viewer>
+          } @else {
+            <div class="select-patient-prompt">
+              <div class="prompt-icon">📋</div>
+              <h3>Seleccione un Paciente</h3>
+              <p>Haga clic en <strong>"📊 Trazabilidad"</strong> en cualquier paciente del Directorio para visualizar su bitácora inmutable de cambios y contactos.</p>
+              <button type="button" class="btn btn--primary" (click)="setTab('directory')">
+                Ir al Directorio de Pacientes
+              </button>
+            </div>
+          }
+        }
+      }
+    </main>
+
+    <!-- FOOTER INSTITUCIONAL -->
+    <footer class="app-footer">
+      <p>
+        TBTB Global Healthcare • Módulo de Admisión y Seguimiento Clínico • Desarrollado con .NET 8 WebApi y Angular 18 Standalone
+      </p>
+    </footer>
+  </div>
+
+  <!-- MODAL: REGISTRAR CONTACTO (CA-2) -->
+  <app-contact-modal
+    [isOpen]="isContactModalOpen"
+    [patientId]="selectedPatientForContact?.id || ''"
+    [patientName]="selectedPatientForContact?.fullName || ''"
+    (closed)="isContactModalOpen = false"
+    (contactCreated)="onContactCreated()"
+  ></app-contact-modal>
+
+  <!-- MODAL: CORREGIR CONTACTO CON MOTIVO >= 10 CARACTERES (CA-3) -->
+  <app-contact-correct-modal
+    [isOpen]="isContactCorrectModalOpen"
+    [contact]="selectedContactForCorrection"
+    (closed)="isContactCorrectModalOpen = false"
+    (corrected)="onContactCorrected()"
+  ></app-contact-correct-modal>
+
+  <!-- MODAL: EDITAR PACIENTE CON AUDITORÍA GXP >= 10 CARACTERES (CA-3) -->
+  <app-patient-edit-modal
+    [isOpen]="isPatientEditModalOpen"
+    [patient]="selectedPatientForEdit"
+    (closed)="isPatientEditModalOpen = false"
+    (updated)="onPatientUpdated()"
+  ></app-patient-edit-modal>
+}

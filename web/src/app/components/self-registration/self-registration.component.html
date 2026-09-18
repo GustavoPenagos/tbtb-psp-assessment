@@ -1,0 +1,253 @@
+<div class="self-reg-wrapper">
+  <div class="self-reg-container">
+    <!-- CABECERA INSTITUCIONAL PÚBLICA -->
+    <header class="self-reg-header">
+      <div class="brand-logo">
+        <span class="brand-icon">⚕️</span>
+        <div>
+          <h1 class="brand-title">TBTB PSP Global</h1>
+          <p class="brand-subtitle">Programa de Acompañamiento a Pacientes • Colombia, Perú y Ecuador</p>
+        </div>
+      </div>
+    </header>
+
+    @if (isValidatingToken) {
+      <div class="state-card">
+        <div class="spinner spinner--lg"></div>
+        <h3>Validando enlace de autorregistro...</h3>
+        <p>Por favor espere mientras verificamos la vigencia del token de seguridad.</p>
+      </div>
+    } @else if (!isTokenValid) {
+      <div class="state-card state-card--error">
+        <div class="state-icon">⚠️</div>
+        <h3>Enlace No Disponible</h3>
+        <p>{{ tokenError }}</p>
+        <div class="state-hint">
+          Si considera que esto es un error, por favor comuníquese con el gestor de salud asignado a su caso.
+        </div>
+      </div>
+    } @else {
+      <!-- INDICADOR DE PASOS WIZARD -->
+      @if (currentStep < 3) {
+        <div class="steps-progress">
+          <div class="step-indicator" [class.step-indicator--active]="currentStep === 1" [class.step-indicator--completed]="currentStep > 1">
+            <span class="step-num">1</span>
+            <span class="step-label">Identificación</span>
+          </div>
+          <div class="step-line" [class.step-line--active]="currentStep > 1"></div>
+          <div class="step-indicator" [class.step-indicator--active]="currentStep === 2">
+            <span class="step-num">2</span>
+            <span class="step-label">Datos Clínicos</span>
+          </div>
+        </div>
+      }
+
+      <!-- PASO 1: IDENTIFICACIÓN -->
+      @if (currentStep === 1) {
+        <div class="wizard-card">
+          <div class="wizard-card__header">
+            <span class="badge badge--blue">Paso 1 de 2</span>
+            <h2>Identificación del Paciente</h2>
+            <p>Ingrese sus datos básicos para verificar su autorización en el programa.</p>
+          </div>
+
+          <form [formGroup]="step1Form" (ngSubmit)="submitStep1()" class="wizard-card__body">
+            <div class="form-group">
+              <label for="selfCountry" class="form-label">País de Residencia <span class="required">*</span></label>
+              <select id="selfCountry" class="form-select" formControlName="countryCode" (change)="onCountryChange($event)">
+                <option value="CO">🇨🇴 Colombia (+57)</option>
+                <option value="PE">🇵🇪 Perú (+51)</option>
+                <option value="EC">🇪🇨 Ecuador (+593)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="selfFullName" class="form-label">Nombre y Apellidos Completos <span class="required">*</span></label>
+              <input
+                id="selfFullName"
+                type="text"
+                class="form-control"
+                formControlName="fullName"
+                placeholder="Tal como figura en su documento de identidad"
+              />
+              @if (step1Form.get('fullName')?.invalid && step1Form.get('fullName')?.touched) {
+                <div class="form-error">Nombre completo requerido.</div>
+              }
+            </div>
+
+            <div class="form-group">
+              <label for="selfEmail" class="form-label">Correo Electrónico <span class="required">*</span></label>
+              <input
+                id="selfEmail"
+                type="email"
+                class="form-control"
+                formControlName="email"
+                placeholder="su-correo@ejemplo.com"
+              />
+              @if (step1Form.get('email')?.invalid && step1Form.get('email')?.touched) {
+                <div class="form-error">Correo electrónico válido requerido.</div>
+              }
+            </div>
+
+            <div class="wizard-card__footer">
+              <button type="submit" class="btn btn--primary" [disabled]="step1Form.invalid || isSubmitting">
+                @if (isSubmitting) {
+                  <span class="spinner"></span> Verificando...
+                } @else {
+                  Continuar al Paso 2 ➔
+                }
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
+      <!-- PASO 2: DATOS OBLIGATORIOS Y ACTIVACIÓN -->
+      @if (currentStep === 2) {
+        <div class="wizard-card">
+          <div class="wizard-card__header">
+            <span class="badge badge--emerald">Paso 2 de 2</span>
+            <h2>Datos Clínicos y Contacto</h2>
+            <p>Complete la información requerida para activar su cobertura en el programa PSP.</p>
+          </div>
+
+          <form [formGroup]="step2Form" (ngSubmit)="submitStep2()" class="wizard-card__body">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="selfDocType" class="form-label">Tipo de Documento <span class="required">*</span></label>
+                <select id="selfDocType" class="form-select" formControlName="documentType">
+                  <option value="CC">Cédula de Ciudadanía (CC)</option>
+                  <option value="DNI">Documento Nacional de Identidad (DNI)</option>
+                  <option value="CEDULA">Cédula de Identidad (Ecuador)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="selfDocNum" class="form-label">Número de Documento <span class="required">*</span></label>
+                <input
+                  id="selfDocNum"
+                  type="text"
+                  class="form-control"
+                  formControlName="documentNumber"
+                  placeholder="Número de identificación oficial"
+                />
+                @if (step2Form.get('documentNumber')?.invalid && step2Form.get('documentNumber')?.touched) {
+                  <div class="form-error">Número de documento obligatorio.</div>
+                }
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="selfPhone" class="form-label">Teléfono de Contacto (E.164) <span class="required">*</span></label>
+                <input
+                  id="selfPhone"
+                  type="text"
+                  class="form-control"
+                  formControlName="phone"
+                  placeholder="+573001234567"
+                />
+                <span class="form-hint">Incluya el prefijo (+57, +51, +593).</span>
+                @if (step2Form.get('phone')?.invalid && step2Form.get('phone')?.touched) {
+                  <div class="form-error">Formato E.164 válido requerido.</div>
+                }
+              </div>
+
+              <div class="form-group">
+                <label for="selfCity" class="form-label">Ciudad de Residencia <span class="required">*</span></label>
+                <input
+                  id="selfCity"
+                  type="text"
+                  class="form-control"
+                  formControlName="city"
+                  placeholder="Ej: Bogotá / Lima / Quito"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="selfTreatmentStart" class="form-label">Fecha de Inicio de Tratamiento <span class="required">*</span></label>
+                <input
+                  id="selfTreatmentStart"
+                  type="date"
+                  class="form-control"
+                  formControlName="treatmentStart"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="selfFollowUp" class="form-label">Frecuencia de Seguimiento (Días) <span class="required">*</span></label>
+                <input
+                  id="selfFollowUp"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="form-control"
+                  formControlName="followUpDays"
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="selfConsentDate" class="form-label">Fecha de Consentimiento Informado</label>
+              <input
+                id="selfConsentDate"
+                type="date"
+                class="form-control"
+                formControlName="consentDate"
+              />
+            </div>
+
+            <div class="wizard-card__footer">
+              <button type="button" class="btn btn--secondary" (click)="currentStep = 1" [disabled]="isSubmitting">
+                ⬅ Atrás
+              </button>
+              <button type="submit" class="btn btn--primary" [disabled]="step2Form.invalid || isSubmitting">
+                @if (isSubmitting) {
+                  <span class="spinner"></span> Finalizando Registro...
+                } @else {
+                  Completar Registro y Activar ➔
+                }
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
+      <!-- PASO 3: CONFIRMACIÓN EXITOSA -->
+      @if (currentStep === 3) {
+        <div class="wizard-card wizard-card--success">
+          <div class="success-icon">🎉</div>
+          <h2>¡Registro Completado con Éxito!</h2>
+          <p class="success-desc">
+            Bienvenido al Programa de Acompañamiento a Pacientes (PSP). Sus datos han sido verificados y su cuenta ha quedado en estado <strong>ACTIVO</strong>.
+          </p>
+
+          <div class="patient-summary">
+            <div class="summary-item">
+              <span class="summary-label">Paciente:</span>
+              <span class="summary-value">{{ completedPatient?.fullName }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Documento:</span>
+              <span class="summary-value">{{ completedPatient?.documentType }} {{ completedPatient?.documentNumber }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">País:</span>
+              <span class="summary-value">{{ completedPatient?.countryCode }}</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Estado Clínico:</span>
+              <span class="badge badge--emerald">{{ completedPatient?.status }}</span>
+            </div>
+          </div>
+
+          <p class="token-invalid-notice">
+            🔒 Por motivos de seguridad y buenas prácticas GxP, este enlace temporal ha sido invalidado y no podrá volver a utilizarse.
+          </p>
+        </div>
+      }
+    }
+  </div>
+</div>

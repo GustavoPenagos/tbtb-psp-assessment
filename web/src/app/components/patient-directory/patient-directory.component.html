@@ -1,0 +1,169 @@
+<div class="directory-card">
+  <!-- BARRA SUPERIOR CON ACCIONES GLOBALES -->
+  <div class="directory-card__header">
+    <div>
+      <div class="badge-row">
+        <span class="badge badge--blue">Directorio Centralizado</span>
+        <span class="badge badge--count">{{ totalCount }} Pacientes</span>
+      </div>
+      <h2 class="directory-card__title">Directorio de Pacientes</h2>
+      <p class="directory-card__subtitle">
+        Consulta activa con filtros regionales (CO, PE, EC) y columna de correo electrónico visible.
+      </p>
+    </div>
+
+    <div class="directory-card__actions">
+      <button type="button" class="btn btn--outline" (click)="generateSelfRegLink()">
+        🔗 Generar Enlace Autorregistro
+      </button>
+      <button type="button" class="btn btn--primary" (click)="loadPatients()">
+        🔄 Actualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- BARRA DE BÚSQUEDA Y FILTROS -->
+  <div class="directory-card__filters">
+    <div class="search-box">
+      <svg class="search-box__icon" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+      </svg>
+      <input
+        type="text"
+        class="search-box__input"
+        placeholder="Buscar por nombre, documento, correo, teléfono o ciudad..."
+        [(ngModel)]="searchFilter"
+        (input)="applySearchFilter()"
+      />
+    </div>
+
+    <div class="filter-controls">
+      <select class="filter-select" [(ngModel)]="selectedCountry" (change)="onFilterChange()">
+        <option value="">🌍 Todos los Países</option>
+        <option value="CO">🇨🇴 Colombia</option>
+        <option value="PE">🇵🇪 Perú</option>
+        <option value="EC">🇪🇨 Ecuador</option>
+      </select>
+
+      <select class="filter-select" [(ngModel)]="selectedStatus" (change)="onFilterChange()">
+        <option value="">🏷️ Todos los Estados</option>
+        <option value="ACTIVE">ACTIVO</option>
+        <option value="PENDING">PENDIENTE</option>
+        <option value="INACTIVE">INACTIVO</option>
+        <option value="UNREACHABLE">NO CONTACTABLE</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- TABLA CLÍNICA DE PACIENTES -->
+  <div class="table-container">
+    @if (isLoading) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Cargando registros de pacientes desde SQL Server...</p>
+      </div>
+    } @else if (filteredPatients.length === 0) {
+      <div class="empty-state">
+        <div class="empty-state__icon">🔍</div>
+        <h4>No se encontraron pacientes</h4>
+        <p>Intente con otro término de búsqueda o ajuste los filtros de país y estado.</p>
+      </div>
+    } @else {
+      <table class="clinical-table">
+        <thead>
+          <tr>
+            <th>País</th>
+            <th>Nombre del Paciente</th>
+            <th>Identificación</th>
+            <th>Teléfono Principal</th>
+            <!-- COLUMNA OBLIGATORIA DE CORREO ELECTRÓNICO VISIBLE -->
+            <th class="col-email">Correo Electrónico</th>
+            <th>Ciudad</th>
+            <th>Estado</th>
+            <th>Origen</th>
+            <th class="col-actions">Acciones Clínicas</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of filteredPatients; track trackByPatientId($index, p)) {
+            <tr>
+              <td>
+                <span class="country-pill">
+                  @switch (p.countryCode) {
+                    @case ('CO') { 🇨🇴 CO }
+                    @case ('PE') { 🇵🇪 PE }
+                    @case ('EC') { 🇪🇨 EC }
+                    @default { {{ p.countryCode }} }
+                  }
+                </span>
+              </td>
+              <td>
+                <strong class="patient-name">{{ p.fullName }}</strong>
+                <span class="patient-date">Reg: {{ p.createdAt | date:'dd/MM/yyyy' }}</span>
+              </td>
+              <td>
+                <span class="doc-badge">{{ p.documentType || 'N/A' }}</span>
+                <span class="doc-num">{{ p.documentNumber || 'Pendiente' }}</span>
+              </td>
+              <td>
+                @if (p.phone) {
+                  <span class="phone-link">{{ p.phone }}</span>
+                } @else {
+                  <span class="text-muted">—</span>
+                }
+              </td>
+              <!-- DATO VISIBLE EN TABLA -->
+              <td class="col-email">
+                <span class="email-badge" title="{{ p.email }}">
+                  {{ p.email }}
+                </span>
+              </td>
+              <td>{{ p.city || '—' }}</td>
+              <td>
+                <span class="status-pill" [ngClass]="'status-pill--' + p.status.toLowerCase()">
+                  {{ p.status }}
+                </span>
+              </td>
+              <td>
+                <span class="source-badge" [class.source-badge--self]="p.registrationSource === 'SELF'">
+                  {{ p.registrationSource === 'SELF' ? '🌐 Web' : '👤 Gestor' }}
+                </span>
+              </td>
+              <td class="col-actions">
+                <div class="btn-group">
+                  <button
+                    type="button"
+                    class="btn-action btn-action--contact"
+                    [disabled]="p.status !== 'ACTIVE'"
+                    [title]="p.status === 'ACTIVE' ? 'Registrar contacto CA-2' : 'Paciente debe estar ACTIVO para registrar contacto'"
+                    (click)="openContactModal.emit(p)"
+                  >
+                    📞 + Contacto
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn-action btn-action--edit"
+                    title="Editar datos con auditoría GxP (CA-3)"
+                    (click)="openEditModal.emit(p)"
+                  >
+                    ✏️ Editar
+                  </button>
+
+                  <button
+                    type="button"
+                    class="btn-action btn-action--audit"
+                    title="Ver historial de auditoría y contactos (CA-3)"
+                    (click)="openAuditViewer.emit(p)"
+                  >
+                    📊 Trazabilidad
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

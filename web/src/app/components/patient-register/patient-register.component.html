@@ -1,0 +1,162 @@
+<div class="register-card">
+  <div class="register-card__header">
+    <div class="register-card__badge-group">
+      <span class="badge badge--emerald">CA-1 • Admisión Clínica</span>
+      <span class="badge badge--blue">Multi-País CO / PE / EC</span>
+    </div>
+    <h2 class="register-card__title">Registrar Nuevo Paciente</h2>
+    <p class="register-card__subtitle">
+      Formulario de alta médica por gestor. El paciente quedará inmediatamente en estado <strong>ACTIVO</strong>.
+    </p>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="register-card__body">
+    <!-- SELECCIÓN DE PAÍS CON BANDERA -->
+    <div class="form-group">
+      <label for="countryCode" class="form-label">País de Residencia <span class="required">*</span></label>
+      <select id="countryCode" class="form-select form-select--lg" formControlName="countryCode" (change)="onCountryChange($event)">
+        @for (c of countries; track c.code) {
+          <option [value]="c.code">{{ c.flag }} {{ c.label }} (Prefijo: {{ c.prefix }} • Doc: {{ c.docType }})</option>
+        }
+      </select>
+    </div>
+
+    <!-- NOMBRE COMPLETO -->
+    <div class="form-group">
+      <label for="fullName" class="form-label">Nombre Completo del Paciente <span class="required">*</span></label>
+      <input
+        id="fullName"
+        type="text"
+        class="form-control"
+        formControlName="fullName"
+        placeholder="Ej. Sofía Mariana Restrepo"
+      />
+      @if (form.get('fullName')?.invalid && form.get('fullName')?.touched) {
+        <div class="form-error">El nombre completo es obligatorio.</div>
+      }
+    </div>
+
+    <!-- DOCUMENTO -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="documentType" class="form-label">Tipo de Documento <span class="required">*</span></label>
+        <select id="documentType" class="form-select" formControlName="documentType">
+          <option value="CC">Cédula de Ciudadanía (CC)</option>
+          <option value="DNI">Documento Nacional de Identidad (DNI)</option>
+          <option value="CEDULA">Cédula de Identidad (Ecuador)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="documentNumber" class="form-label">Número de Documento <span class="required">*</span></label>
+        <input
+          id="documentNumber"
+          type="text"
+          class="form-control"
+          formControlName="documentNumber"
+          placeholder="Sin puntos ni espacios"
+        />
+        @if (form.get('documentNumber')?.invalid && form.get('documentNumber')?.touched) {
+          <div class="form-error">Número de documento inválido o requerido.</div>
+        }
+      </div>
+    </div>
+
+    <!-- CONTACTABILIDAD OBLIGATORIA (E.164 Y CORREO) -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="phone" class="form-label">
+          Teléfono Principal (E.164) <span class="required">*</span>
+        </label>
+        <input
+          id="phone"
+          type="text"
+          class="form-control"
+          formControlName="phone"
+          placeholder="+573001234567"
+        />
+        <span class="form-hint">Obligatorio con prefijo internacional (+57, +51 o +593).</span>
+        @if (form.get('phone')?.invalid && form.get('phone')?.touched) {
+          <div class="form-error">Formato E.164 obligatorio (Ej: +573001234567).</div>
+        }
+      </div>
+
+      <div class="form-group">
+        <label for="email" class="form-label">Correo Electrónico <span class="required">*</span></label>
+        <input
+          id="email"
+          type="email"
+          class="form-control"
+          formControlName="email"
+          placeholder="paciente@dominio.com"
+        />
+        @if (form.get('email')?.invalid && form.get('email')?.touched) {
+          <div class="form-error">Correo electrónico válido requerido.</div>
+        }
+      </div>
+    </div>
+
+    <!-- CIUDAD Y SEGUIMIENTO -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="city" class="form-label">Ciudad de Residencia <span class="required">*</span></label>
+        <input
+          id="city"
+          type="text"
+          class="form-control"
+          formControlName="city"
+          placeholder="Ej: Medellín / Lima / Quito"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="followUpDays" class="form-label">Días para Próximo Contacto <span class="required">*</span></label>
+        <input
+          id="followUpDays"
+          type="number"
+          min="1"
+          max="365"
+          class="form-control"
+          formControlName="followUpDays"
+        />
+        <span class="form-hint">Definido por el protocolo del área médica (> 0).</span>
+      </div>
+    </div>
+
+    <!-- FECHAS DE TRATAMIENTO Y CONSENTIMIENTO -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="treatmentStart" class="form-label">Fecha de Inicio de Tratamiento <span class="required">*</span></label>
+        <input
+          id="treatmentStart"
+          type="date"
+          class="form-control"
+          formControlName="treatmentStart"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="consentDate" class="form-label">Fecha Consentimiento Informado</label>
+        <input
+          id="consentDate"
+          type="date"
+          class="form-control"
+          formControlName="consentDate"
+        />
+      </div>
+    </div>
+
+    <div class="register-card__footer">
+      <button type="button" class="btn btn--secondary" (click)="resetForm()" [disabled]="isSubmitting">
+        Limpiar
+      </button>
+      <button type="submit" class="btn btn--primary" [disabled]="form.invalid || isSubmitting">
+        @if (isSubmitting) {
+          <span class="spinner"></span> Guardando Paciente...
+        } @else {
+          Registrar Paciente Activo
+        }
+      </button>
+    </div>
+  </form>
+</div>

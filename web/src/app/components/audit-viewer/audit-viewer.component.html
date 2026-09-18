@@ -1,0 +1,152 @@
+<div class="audit-panel">
+  <div class="audit-panel__header">
+    <div class="audit-panel__title-group">
+      <div class="badge-row">
+        <span class="badge badge--purple">GxP • ALCOA+ • 21 CFR Part 11</span>
+        @if (patient?.status) {
+          <span class="badge" [ngClass]="'badge--' + patient?.status?.toLowerCase()">
+            {{ patient?.status }}
+          </span>
+        }
+      </div>
+      <h2 class="audit-panel__title">{{ patient?.fullName }}</h2>
+      <p class="audit-panel__doc">
+        Doc: <strong>{{ patient?.documentType }} {{ patient?.documentNumber }}</strong> • País: <strong>{{ patient?.countryCode }}</strong> • Tel: <strong>{{ patient?.phone }}</strong>
+      </p>
+    </div>
+    <button type="button" class="btn-close" (click)="close.emit()" aria-label="Cerrar panel de trazabilidad">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+    </button>
+  </div>
+
+  <!-- TABS DE NAVEGACIÓN -->
+  <div class="audit-panel__tabs">
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab === 'audits'"
+      (click)="activeTab = 'audits'"
+    >
+      Traza de Cambios ({{ auditHistory.length }})
+    </button>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab === 'contacts'"
+      (click)="activeTab = 'contacts'"
+    >
+      Historial de Contactos ({{ contacts.length }})
+    </button>
+  </div>
+
+  <div class="audit-panel__content">
+    @if (isLoading) {
+      <div class="loading-state">
+        <div class="spinner spinner--dark"></div>
+        <p>Cargando registros forenses de base de datos...</p>
+      </div>
+    } @else if (activeTab === 'audits') {
+      <!-- HISTORIAL DE AUDITORÍA CON CHIPS ROJO VS VERDE -->
+      @if (auditHistory.length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon">📋</div>
+          <h4>Sin modificaciones registradas</h4>
+          <p>Este paciente conserva sus valores originales de registro sin alteraciones auditadas.</p>
+        </div>
+      } @else {
+        <div class="timeline">
+          @for (log of auditHistory; track log.id) {
+            <div class="timeline-item">
+              <div class="timeline-item__marker"></div>
+              <div class="timeline-item__card">
+                <div class="timeline-item__meta">
+                  <span class="meta-date">
+                    🕒 {{ log.changedAt | date:'dd/MM/yyyy HH:mm:ss' }} UTC
+                  </span>
+                  <span class="meta-user">
+                    👤 Modificado por: <strong>{{ log.changedByName || 'Gestor Clínico' }}</strong>
+                  </span>
+                </div>
+
+                <div class="timeline-item__reason">
+                  <span class="reason-label">Justificación Regulatoria:</span>
+                  <p class="reason-text">"{{ log.reason }}"</p>
+                </div>
+
+                <!-- CHIPS COMPARATIVOS: ROJO TACHADO VS VERDE -->
+                <div class="diff-container">
+                  <div class="diff-header">Comparativa de Valores Auditados:</div>
+                  @for (diff of log.diffs; track diff.field) {
+                    <div class="diff-row">
+                      <span class="diff-field">{{ diff.field }}:</span>
+                      <div class="diff-chips">
+                        <span class="chip chip--old" title="Valor anterior">
+                          <span class="strikethrough">{{ diff.oldValue }}</span>
+                        </span>
+                        <span class="diff-arrow">➔</span>
+                        <span class="chip chip--new" title="Valor nuevo">
+                          {{ diff.newValue }}
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    } @else {
+      <!-- LISTA DE CONTACTOS CA-2 / CA-3 -->
+      @if (contacts.length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon">📞</div>
+          <h4>No se registran contactos</h4>
+          <p>Aún no se han documentado interacciones con este paciente.</p>
+        </div>
+      } @else {
+        <div class="contacts-list">
+          @for (c of contacts; track c.id) {
+            <div class="contact-card" [class.contact-card--inactive]="!c.isActive">
+              <div class="contact-card__top">
+                <div class="contact-card__badge-group">
+                  <span class="badge badge--channel">
+                    @switch (c.channel) {
+                      @case ('PHONE') { 📞 Teléfono }
+                      @case ('WHATSAPP') { 💬 WhatsApp }
+                      @case ('EMAIL') { ✉️ Correo }
+                    }
+                  </span>
+                  <span class="badge" [ngClass]="'badge--result-' + c.result.toLowerCase()">
+                    {{ c.result }}
+                  </span>
+                  @if (!c.isActive) {
+                    <span class="badge badge--danger">Corregido / Inactivo</span>
+                  }
+                </div>
+                <div class="contact-card__date">
+                  {{ c.contactDate | date:'dd/MM/yyyy HH:mm' }}
+                </div>
+              </div>
+
+              @if (c.notes) {
+                <p class="contact-card__notes">"{{ c.notes }}"</p>
+              }
+
+              <div class="contact-card__footer">
+                <span class="contact-card__author">
+                  Registrado por: <strong>{{ c.registeredByName || 'Gestor' }}</strong>
+                </span>
+                @if (c.isActive) {
+                  <button type="button" class="btn-correct" (click)="correct(c)">
+                    ✏️ Corregir Contacto
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>
