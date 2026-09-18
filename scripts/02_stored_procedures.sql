@@ -584,3 +584,106 @@ BEGIN
     END CATCH
 END;
 GO
+
+-- ============================================================================
+-- 5. AUDITORÍA Y ACTUALIZACIÓN DE PACIENTES (GxP)
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- SP: sp_UpdatePatientWithAudit (Edición auditada con snapshot JSON inmutable)
+-- ----------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE dbo.sp_UpdatePatientWithAudit
+    @PatientId      UNIQUEIDENTIFIER,
+    @Phone          NVARCHAR(20),
+    @City           NVARCHAR(100),
+    @FollowUpDays   INT,
+    @Status         NVARCHAR(20),
+    @ChangedBy      UNIQUEIDENTIFIER,
+    @Reason         NVARCHAR(300)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- 1. Validar motivo obligatorio >= 10 caracteres
+        IF @Reason IS NULL OR LEN(LTRIM(RTRIM(@Reason))) < 10
+            THROW 50050, 'Reason is required and must be at least 10 characters long.', 1;
+
+        -- 2. Validar que el paciente exista
+        DECLARE @PrevJson NVARCHAR(MAX);
+        SELECT @PrevJson = (
+            SELECT id, full_name, document_type, document_number, country_code,
+                   phone, email, city, treatment_start, follow_up_days, status, updated_at
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+        FROM dbo.patients
+        WHERE id = @PatientId;
+
+        IF @PrevJson IS NULL
+            THROW 50030, 'Patient not found.', 1;
+
+        -- 3. Validar unicidad de teléfono si cambió
+        IF @Phone IS NOT NULL AND EXISTS (
+            SELECT 1 FROM dbo.patients 
+            WHERE phone = @Phone AND id <> @PatientId
+        )
+        BEGIN
+            THROW 50005, 'Patient with this phone number already exists.', 1;
+        END;
+
+        -- 4. Actualizar paciente
+        UPDATE dbo.patients
+        SET phone = @Phone,
+            city = @City,
+            follow_up_days = @FollowUpDays,
+            status = @Status,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @PatientId;
+
+        -- 5. Generar snapshot del nuevo estado e insertar en log inmutable
+        DECLARE @NewJson NVARCHAR(MAX);
+        SELECT @NewJson = (
+            SELECT id, full_name, document_type, document_number, country_code,
+                   phone, email, city, treatment_start, follow_up_days, status, updated_at
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+        FROM dbo.patients
+        WHERE id = @PatientId;
+
+        INSERT INTO dbo.patient_audit_log (
+            id, patient_id, changed_by, changed_at, reason, previous_value, new_value
+        )
+        VALUES (
+            NEWSEQUENTIALID(), @PatientId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
+        );
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+-- ----------------------------------------------------------------------------
+-- SP: sp_GetPatientAuditHistory (Consulta de historial inmutable de paciente)
+-- ----------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE dbo.sp_GetPatientAuditHistory
+    @PatientId UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT a.id, a.patient_id, a.changed_by, u.name AS changed_by_name,
+           a.changed_at, a.reason, a.previous_value, a.new_value
+    FROM dbo.patient_audit_log a
+    INNER JOIN dbo.users u ON a.changed_by = u.id
+    WHERE a.patient_id = @PatientId
+    ORDER BY a.changed_at DESC;
+END;
+GO
