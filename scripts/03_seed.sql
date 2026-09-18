@@ -6,6 +6,8 @@
 -- Carga: Gestores, pacientes multi-país (CO/PE/EC), contactos, auditoría y tokens
 -- ============================================================================
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
 SET NOCOUNT ON;
 GO
 
@@ -111,7 +113,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.registration_links WHERE token = 'TOKENPRUEBA20
         id, token, created_by, patient_id, status, expires_at, created_at
     )
     VALUES (
-        NEWSEQUENTIALID(), 'TOKENPRUEBA2026ACTIVO00000000001', @Gestor1Id, NULL, 
+        NEWID(), 'TOKENPRUEBA2026ACTIVO00000000001', @Gestor1Id, NULL, 
         'PENDING', DATEADD(DAY, 7, SYSUTCDATETIME()), SYSUTCDATETIME()
     );
 
@@ -121,7 +123,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.registration_links WHERE token = 'TOKENPRUEBAPA
         id, token, created_by, patient_id, status, expires_at, created_at
     )
     VALUES (
-        NEWSEQUENTIALID(), 'TOKENPRUEBAPASO1COMPLETO00000002', @Gestor1Id, @PatientPendingId, 
+        NEWID(), 'TOKENPRUEBAPASO1COMPLETO00000002', @Gestor1Id, @PatientPendingId, 
         'STEP1_DONE', DATEADD(DAY, 7, SYSUTCDATETIME()), SYSUTCDATETIME()
     );
 
@@ -131,7 +133,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.registration_links WHERE token = 'TOKENPRUEBAEX
         id, token, created_by, patient_id, status, expires_at, created_at
     )
     VALUES (
-        NEWSEQUENTIALID(), 'TOKENPRUEBAEXPIRADO0000000000003', @Gestor2Id, NULL, 
+        NEWID(), 'TOKENPRUEBAEXPIRADO0000000000003', @Gestor2Id, NULL, 
         'PENDING', DATEADD(DAY, -1, SYSUTCDATETIME()), DATEADD(DAY, -8, SYSUTCDATETIME())
     );
 
@@ -193,7 +195,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.contact_audit_log WHERE contact_id = @ContactOr
         id, contact_id, changed_by, changed_at, reason, previous_value, new_value
     )
     VALUES (
-        NEWSEQUENTIALID(), @ContactOriginalId, @Gestor2Id, '2026-08-12T09:20:00Z',
+        NEWID(), @ContactOriginalId, @Gestor2Id, '2026-08-12T09:20:00Z',
         'Error al seleccionar el canal en el formulario inicial; la interacción real fue por WhatsApp.',
         '{"id":"55555555-5555-5555-5555-555555555553","channel":"PHONE","result":"NO_ANSWER"}',
         '{"id":"55555555-5555-5555-5555-555555555554","channel":"WHATSAPP","result":"SUCCESSFUL_CONTACT"}'
@@ -276,7 +278,7 @@ BEGIN
             IF @i % 2 = 1
                 SET @AssignedGestor = '33333333-3333-3333-3333-333333333333';
 
-            DECLARE @NewGenPatId UNIQUEIDENTIFIER = NEWSEQUENTIALID();
+            DECLARE @NewGenPatId UNIQUEIDENTIFIER = NEWID();
 
             INSERT INTO dbo.patients (
                 id, full_name, document_type, document_number, country_code,
@@ -300,7 +302,7 @@ BEGIN
                     id, patient_id, contact_date, channel, result, notes, is_active, registered_by, created_at
                 )
                 VALUES (
-                    NEWSEQUENTIALID(), @NewGenPatId, @ContactGenDate, @ChannelGen, @ResultGen,
+                    NEWID(), @NewGenPatId, @ContactGenDate, @ChannelGen, @ResultGen,
                     'Contacto automático de seguimiento según protocolo inicial.', 1, @AssignedGestor, SYSUTCDATETIME()
                 );
             END;

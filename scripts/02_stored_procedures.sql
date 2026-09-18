@@ -16,6 +16,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_RegisterPatient (Registro completo por gestor)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_RegisterPatient
     @FullName        NVARCHAR(200),
     @DocumentType    NVARCHAR(10),
@@ -60,7 +64,7 @@ BEGIN
             THROW 50005, 'Patient with this phone number already exists.', 1;
         END;
 
-        SET @NewPatientId = NEWSEQUENTIALID();
+        SET @NewPatientId = NEWID();
 
         INSERT INTO dbo.patients (
             id, full_name, document_type, document_number, country_code,
@@ -88,6 +92,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_GetPatientById (Consulta por identificador único)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_GetPatientById
     @PatientId UNIQUEIDENTIFIER
 AS
@@ -106,6 +114,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_GetPatients (Consulta con filtros y paginación)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_GetPatients
     @CountryCode CHAR(2) = NULL,
     @Status NVARCHAR(20) = NULL,
@@ -132,6 +144,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_UpdatePatientWithAudit (Actualización con auditoría obligatoria GxP)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_UpdatePatientWithAudit
     @PatientId   UNIQUEIDENTIFIER,
     @Phone       NVARCHAR(20),
@@ -194,7 +210,7 @@ BEGIN
             id, patient_id, changed_by, changed_at, reason, previous_value, new_value
         )
         VALUES (
-            NEWSEQUENTIALID(), @PatientId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
+            NEWID(), @PatientId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
         );
 
         -- Actualizar datos del paciente
@@ -218,6 +234,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_GetPatientAuditHistory (Consulta de trazabilidad inmutable de paciente)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_GetPatientAuditHistory
     @PatientId UNIQUEIDENTIFIER
 AS
@@ -240,6 +260,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_CreateRegistrationLink (Gestor genera enlace con token)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_CreateRegistrationLink
     @CreatedBy      UNIQUEIDENTIFIER,
     @ExpiresInDays  INT = 7,
@@ -256,7 +280,7 @@ BEGIN
         id, token, created_by, status, expires_at, created_at
     )
     VALUES (
-        NEWSEQUENTIALID(), @Token, @CreatedBy, 'PENDING', @ExpiresAt, SYSUTCDATETIME()
+        NEWID(), @Token, @CreatedBy, 'PENDING', @ExpiresAt, SYSUTCDATETIME()
     );
 END;
 GO
@@ -264,6 +288,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_ValidateRegistrationLink (Validación de vigencia del token)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_ValidateRegistrationLink
     @Token NVARCHAR(64)
 AS
@@ -284,6 +312,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_IdentifyPatientSelfReg (Paso 1: Identificación y filtro de acceso)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_IdentifyPatientSelfReg
     @Token        NVARCHAR(64),
     @FullName     NVARCHAR(200),
@@ -319,7 +351,7 @@ BEGIN
             THROW 50004, 'Patient with this email address already exists.', 1;
 
         -- Crear registro preliminar de paciente en estado PENDING
-        SET @PatientId = NEWSEQUENTIALID();
+        SET @PatientId = NEWID();
 
         INSERT INTO dbo.patients (
             id, full_name, email, country_code, status,
@@ -351,6 +383,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_CompletePatientSelfReg (Paso 2: Datos obligatorios y activación)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_CompletePatientSelfReg
     @Token           NVARCHAR(64),
     @DocumentType    NVARCHAR(10),
@@ -440,6 +476,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_CreateContact (Registrar nuevo contacto sobre paciente activo)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_CreateContact
     @PatientId      UNIQUEIDENTIFIER,
     @ContactDate    DATETIME2,
@@ -466,7 +506,7 @@ BEGIN
         IF @PatientStatus <> 'ACTIVE'
             THROW 50031, 'Cannot register contact: Patient is not in ACTIVE status.', 1;
 
-        SET @NewContactId = NEWSEQUENTIALID();
+        SET @NewContactId = NEWID();
 
         INSERT INTO dbo.contacts (
             id, patient_id, contact_date, channel, result, notes,
@@ -490,6 +530,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_GetContactsByPatient (Historial de contactos activos del paciente)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_GetContactsByPatient
     @PatientId UNIQUEIDENTIFIER
 AS
@@ -513,6 +557,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_CorrectContact (Soft-update atómico con registro en contact_audit_log)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_CorrectContact
     @OriginalContactId UNIQUEIDENTIFIER,
     @ChangedBy         UNIQUEIDENTIFIER,
@@ -551,7 +599,7 @@ BEGIN
         WHERE id = @OriginalContactId;
 
         -- 4. Insertar nuevo contacto activo con los datos corregidos
-        SET @NewContactId = NEWSEQUENTIALID();
+        SET @NewContactId = NEWID();
         INSERT INTO dbo.contacts (
             id, patient_id, contact_date, channel, result, notes, 
             is_active, registered_by, created_at
@@ -572,7 +620,7 @@ BEGIN
             id, contact_id, changed_by, changed_at, reason, previous_value, new_value
         )
         VALUES (
-            NEWSEQUENTIALID(), @OriginalContactId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
+            NEWID(), @OriginalContactId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
         );
 
         COMMIT TRANSACTION;
@@ -592,6 +640,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_UpdatePatientWithAudit (Edición auditada con snapshot JSON inmutable)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_UpdatePatientWithAudit
     @PatientId      UNIQUEIDENTIFIER,
     @Phone          NVARCHAR(20),
@@ -657,7 +709,7 @@ BEGIN
             id, patient_id, changed_by, changed_at, reason, previous_value, new_value
         )
         VALUES (
-            NEWSEQUENTIALID(), @PatientId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
+            NEWID(), @PatientId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
         );
 
         COMMIT TRANSACTION;
@@ -673,6 +725,10 @@ GO
 -- ----------------------------------------------------------------------------
 -- SP: sp_GetPatientAuditHistory (Consulta de historial inmutable de paciente)
 -- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE dbo.sp_GetPatientAuditHistory
     @PatientId UNIQUEIDENTIFIER
 AS
