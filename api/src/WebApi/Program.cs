@@ -3,6 +3,9 @@ using WebApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configuración explícita del servidor en el puerto 5000
+builder.WebHost.UseUrls("http://localhost:5000");
+
 // Registro modular de dependencias (Infraestructura, Aplicación, WebApi, Swagger y CORS)
 builder.Services.AddAppDependencies(builder.Configuration);
 
@@ -31,7 +34,7 @@ app.UseSwaggerUI(c =>
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "PSP Assessment API v1");
     c.RoutePrefix = "swagger";
     c.DocumentTitle = "PSP API Docs — TBTB Global";
-    c.DefaultModelsExpandDepth(1);
+    c.DefaultModelsExpandDepth(-1);
     c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
     c.DisplayRequestDuration();
     c.EnableFilter();
