@@ -122,23 +122,99 @@ contact_audit_log (
 | `IX_contacts_active_result` | `(patient_id, is_active, result)` | Necesario para CA-5 futuro: contar los últimos N contactos sin éxito de un paciente. El include de `is_active` elimina del resultado los registros corregidos. |
 | `IX_contacts_gestor_date` | `(registered_by, contact_date)` | Soporte preventivo para CA-4 (filtro por gestor y mes). Diseñado ahora para que añadir CA-4 no requiera migración de esquema. |
 
-### Cómo se trata la corrección de un registro ya guardado (CA-3)
+### Estrategia de transaccionalidad e integridad con Stored Procedures (SP)
 
-El sistema **no realiza UPDATE sobre el registro original**. El flujo completo de corrección es:
+Para garantizar la integridad referencial, el aislamiento transaccional y evitar que la capa de aplicación ejecute operaciones directas sin sincronizar las tablas dependientes (`patients`, `contacts`, `contact_audit_log`, `registration_links`), **todas las transacciones de modificación y consulta (Insert, Update, Delete [lógico/soft-delete] y Get) se encapsulan en Stored Procedures (SP) en la base de datos**.
 
-```
-1. BEGIN TRANSACTION
-2.   UPDATE contacts SET is_active = 0 WHERE id = {contactId}
-3.   INSERT INTO contacts (...) VALUES (...nuevos datos...)  → genera nuevo id
-4.   INSERT INTO contact_audit_log (contact_id, changed_by, changed_at, reason,
-       previous_value, new_value) VALUES (...)
-5. COMMIT
+#### Justificación técnica de seguridad:
+1. **Atomicidad estricta (`TRY...CATCH` y `TRANSACTION`):** Las operaciones que afectan más de una tabla se ejecutan dentro de bloques `BEGIN TRANSACTION ... COMMIT TRANSACTION`. Ante cualquier fallo o violación de restricción, el bloque `CATCH` ejecuta `ROLLBACK TRANSACTION`, impidiendo inconsistencias parciales.
+2. **Protección contra desincronización entre tablas:** Ningún proceso externo puede modificar una tabla aislada sin ejecutar las validaciones cruzadas (por ejemplo: validar que un paciente esté en estado `ACTIVE` antes de insertar un contacto, o actualizar el estado del token a `USED` al momento de activar el paciente).
+3. **Seguridad y rendimiento:** Se mitigan riesgos de SQL Injection, se reutilizan planes de ejecución en SQL Server y se centraliza la regla de negocio transaccional.
+
+#### Catálogo de Stored Procedures:
+
+| Tipo | Stored Procedure | Tablas Afectadas | Propósito y Control Transaccional |
+|------|------------------|------------------|-----------------------------------|
+| **Insert** | `sp_RegisterPatient` | `patients` | Registra paciente por gestor validando unicidad `(country_code, document_type, document_number)`. Asigna estado `ACTIVE`. |
+| **Insert** | `sp_IdentifyPatientSelfReg` | `patients`, `registration_links` | Paso 1 autorregistro: Inserta paciente preliminar en estado `PENDING` y actualiza el token a `STEP1_DONE` en una sola transacción. |
+| **Update** | `sp_CompletePatientSelfReg` | `patients`, `registration_links` | Paso 2 autorregistro: En transacción atómica completa los datos obligatorios (`follow_up_days`, doc, tel), pasa el paciente a `ACTIVE` y marca el token como `USED` (`used_at = SYSUTCDATETIME()`). |
+| **Get** | `sp_GetPatientById` | `patients` | Consulta de detalle de paciente por identificador único. |
+| **Get** | `sp_GetPatients` | `patients` | Consulta paginada con filtros por país y estado. |
+| **Insert** | `sp_CreateContact` | `contacts`, `patients` | Valida que el paciente exista y tenga `status = 'ACTIVE'`. Si es válido, inserta el nuevo contacto. Si no, genera error y no inserta. |
+| **Get** | `sp_GetContactsByPatient` | `contacts` | Consulta el historial de contactos activos (`is_active = 1`) ordenados por fecha descendente. |
+| **Update / Soft-Delete** | `sp_CorrectContact` | `contacts`, `contact_audit_log` | **Transacción atómica (CA-3):** Realiza soft-delete (`is_active = 0`) del contacto original, inserta el nuevo contacto corregido e inserta el snapshot de auditoría inmutable en `contact_audit_log`. |
+| **Insert** | `sp_CreateRegistrationLink` | `registration_links` | Inserta nuevo token de autorregistro vinculado al gestor. |
+| **Get** | `sp_ValidateRegistrationLink` | `registration_links` | Obtiene el estado, vigencia y validez del token de autorregistro. |
+
+---
+
+### Cómo se trata la corrección de un registro ya guardado (CA-3) mediante SP
+
+El sistema **no realiza UPDATE destructivo sobre el registro original**. La corrección se delega exclusivamente al Stored Procedure `sp_CorrectContact`:
+
+```sql
+CREATE PROCEDURE dbo.sp_CorrectContact
+    @OriginalContactId UNIQUEIDENTIFIER,
+    @ChangedBy         UNIQUEIDENTIFIER,
+    @NewContactDate    DATETIME2,
+    @NewChannel        NVARCHAR(20),
+    @NewResult         NVARCHAR(30),
+    @NewNotes          NVARCHAR(500),
+    @Reason            NVARCHAR(300),
+    @NewContactId      UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- 1. Validar que el motivo sea provisto
+        IF @Reason IS NULL OR LTRIM(RTRIM(@Reason)) = ''
+            THROW 50001, 'Reason is required for contact correction.', 1;
+
+        -- 2. Obtener y validar el contacto original activo
+        DECLARE @PatientId UNIQUEIDENTIFIER, @PrevJson NVARCHAR(MAX);
+        SELECT @PatientId = patient_id,
+               @PrevJson = (SELECT id, patient_id, contact_date, channel, result, notes, registered_by, created_at 
+                            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
+        FROM contacts WHERE id = @OriginalContactId AND is_active = 1;
+
+        IF @PatientId IS NULL
+            THROW 50002, 'Contact not found or has already been corrected.', 1;
+
+        -- 3. Soft-delete: desactivar contacto anterior
+        UPDATE contacts SET is_active = 0 WHERE id = @OriginalContactId;
+
+        -- 4. Insertar nuevo contacto activo
+        SET @NewContactId = NEWSEQUENTIALID();
+        INSERT INTO contacts (id, patient_id, contact_date, channel, result, notes, is_active, registered_by, created_at)
+        VALUES (@NewContactId, @PatientId, @NewContactDate, @NewChannel, @NewResult, @NewNotes, 1, @ChangedBy, SYSUTCDATETIME());
+
+        -- 5. Insertar snapshot inmutable en tabla de auditoría
+        DECLARE @NewJson NVARCHAR(MAX) = (
+            SELECT @NewContactId AS id, @PatientId AS patient_id, @NewContactDate AS contact_date, 
+                   @NewChannel AS channel, @NewResult AS result, @NewNotes AS notes, @ChangedBy AS registered_by 
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        INSERT INTO contact_audit_log (id, contact_id, changed_by, changed_at, reason, previous_value, new_value)
+        VALUES (NEWSEQUENTIALID(), @OriginalContactId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson);
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
 ```
 
 - El registro original queda con `is_active = 0` y **nunca se borra**.
-- El `audit_log` captura el snapshot completo en JSON para garantizar trazabilidad total ante una auditoría.
-- El `reason` es obligatorio en el contrato del API: sin motivo, la operación devuelve `400 Bad Request`.
-- Esta decisión resuelve H-02 y cumple con el principio GxP de no sobrescritura de datos de salud.
+- La atomicidad garantiza que nunca existirá un contacto desactivado sin su correspondiente nuevo contacto y su entrada en `contact_audit_log`.
+- Cumple con las normativas GxP y trazabilidad regulatoria del sector salud.
 
 ---
 
@@ -286,22 +362,22 @@ El sistema **no realiza UPDATE sobre el registro original**. El flujo completo d
 | # | Tarea | Tiempo |
 |---|-------|--------|
 | 1 | Commit inicial: `01-hallazgos.md` + `02-plan.md` (este archivo) | 5 min |
-| 2 | `scripts/01_schema.sql` — todas las tablas, constraints e índices | 25 min |
-| 3 | `scripts/02_seed.sql` — 2 gestores, 10 pacientes CO/PE/EC, 20 contactos, 2 tokens de prueba | 15 min |
-| 4 | Estructura solución .NET 8: `dotnet new` + 3 proyectos (API, Application, Infrastructure) | 20 min |
-| 5 | Modelos EF Core + `AppDbContext` + cadena de conexión LocalDB | 15 min |
-| 6 | `PatientService` + `PatientRepository` + `PatientsController` (CA-1 registro gestor) | 40 min |
-| 7 | `RegistrationService` + `RegistrationLinkRepository` + `RegistrationLinksController` (autorregistro pasos 1 y 2) | 40 min |
-| 8 | `ContactService` + `ContactRepository` + `ContactsController` (CA-2) | 35 min |
-| 9 | Soft-update + `contact_audit_log` + `PUT /contacts/{id}` (CA-3) | 20 min |
+| 2 | `scripts/01_schema.sql` — Tablas, constraints e índices | 20 min |
+| 3 | `scripts/02_stored_procedures.sql` — SPs de Insert, Update, Soft-Delete y Get con transacciones seguras | 30 min |
+| 4 | `scripts/03_seed.sql` — Datos iniciales (gestores, pacientes CO/PE/EC, contactos, tokens) | 15 min |
+| 5 | Estructura solución .NET 8: `dotnet new` + 3 proyectos (API, Application, Infrastructure) | 20 min |
+| 6 | Capa de persistencia: ejecución de Stored Procedures vía Dapper / EF Core + LocalDB | 20 min |
+| 7 | `PatientService` + `PatientRepository` + `PatientsController` (CA-1 vía SPs) | 35 min |
+| 8 | `RegistrationService` + `RegistrationLinkRepository` + `RegistrationLinksController` (autorregistro vía SPs) | 35 min |
+| 9 | `ContactService` + `ContactRepository` + `ContactsController` (CA-2 y CA-3 vía `sp_CreateContact` y `sp_CorrectContact`) | 35 min |
 | 10 | `GlobalExceptionMiddleware` + `ProblemDetails` RFC 7807 | 10 min |
 | 11 | Pruebas xUnit: CA-1 gestor (3 tests) + CA-1 autorregistro (5 tests) + CA-2 (4 tests) + CA-3 (3 tests) | 45 min |
-| 12 | Angular 17+: estructura de proyecto + `PatientsService` + `ContactsService` + `RegistrationService` + `ErrorInterceptor` | 20 min |
+| 12 | Angular 17+: estructura de proyecto + servicios + interceptor de errores | 20 min |
 | 13 | UI: formulario registro paciente por gestor + lista de pacientes (CA-1) | 20 min |
-| 14 | UI: autorregistro paso 1 (nombre + correo) + paso 2 (datos completos) | 30 min |
-| 15 | UI: formulario registro contacto + historial de contactos del paciente (CA-2) | 25 min |
+| 14 | UI: autorregistro paso 1 (identificación) + paso 2 (datos completos y días de seguimiento) | 30 min |
+| 15 | UI: formulario registro contacto + historial de contactos (CA-2) | 25 min |
 | 16 | `README.md` + `03-bitacora.md` + commit final | 20 min |
-| | **Total estimado** | **≈ 6 h 10 min** |
+| | **Total estimado** | **≈ 6 h 25 min** |
 
 ---
 
