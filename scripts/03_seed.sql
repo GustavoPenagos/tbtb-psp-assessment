@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- SCRIPT 03: DATOS SEMILLA DE PRUEBA (SEED)
 -- Programa: Acompañamiento a Pacientes (PSP)
 -- Autor: Gustavo Penagos
@@ -198,4 +198,112 @@ IF NOT EXISTS (SELECT 1 FROM dbo.contact_audit_log WHERE contact_id = @ContactOr
         '{"id":"55555555-5555-5555-5555-555555555553","channel":"PHONE","result":"NO_ANSWER"}',
         '{"id":"55555555-5555-5555-5555-555555555554","channel":"WHATSAPP","result":"SUCCESSFUL_CONTACT"}'
     );
+GO
+
+-- ----------------------------------------------------------------------------
+-- 5. CARGA MASIVA OPCIONAL: 400 PACIENTES (SEGÚN NOTA DEL PRD: "El programa arranca con alrededor de cuatrocientos pacientes")
+-- ----------------------------------------------------------------------------
+-- Variable configurable: 1 = Activar lote de 400 pacientes para pruebas de volumen, 0 = Solo seed básico inicial
+DECLARE @Generate400Patients BIT = 1;
+
+IF @Generate400Patients = 1
+BEGIN
+    PRINT 'Iniciando generación opcional de 400 pacientes según nota del PRD...';
+
+    DECLARE @FirstNames TABLE (idx INT IDENTITY(1,1), name NVARCHAR(50));
+    INSERT INTO @FirstNames (name) VALUES 
+    ('Alejandro'), ('Beatriz'), ('Camilo'), ('Diana'), ('Esteban'), ('Fernanda'), ('Gabriel'), ('Helena'),
+    ('Ignacio'), ('Juliana'), ('Lucas'), ('Mariana'), ('Nicolás'), ('Olga'), ('Pablo'), ('Raquel'),
+    ('Santiago'), ('Tatiana'), ('Valentina'), ('William');
+
+    DECLARE @LastNames TABLE (idx INT IDENTITY(1,1), name NVARCHAR(50));
+    INSERT INTO @LastNames (name) VALUES 
+    ('Rodríguez'), ('González'), ('Martínez'), ('López'), ('Gómez'), ('Hernández'), ('Pérez'), ('Castro'),
+    ('Sánchez'), ('Ramírez'), ('Torres'), ('Flores'), ('Díaz'), ('Vargas'), ('Morales'), ('Rojas'),
+    ('Mendoza'), ('Guerrero'), ('Ortiz'), ('Silva');
+
+    DECLARE @i INT = 1;
+    WHILE @i <= 400
+    BEGIN
+        DECLARE @DocNum NVARCHAR(20) = CAST(200000000 + @i AS NVARCHAR(20));
+
+        IF NOT EXISTS (SELECT 1 FROM dbo.patients WHERE document_number = @DocNum)
+        BEGIN
+            DECLARE @ModCountry INT = @i % 3;
+            DECLARE @Country CHAR(2);
+            DECLARE @DocType NVARCHAR(10);
+            DECLARE @Phone NVARCHAR(20);
+            DECLARE @City NVARCHAR(100);
+
+            IF @ModCountry = 0
+            BEGIN
+                SET @Country = 'CO';
+                SET @DocType = 'CC';
+                SET @Phone = '+573' + RIGHT('00000000' + CAST(10000000 + @i AS VARCHAR(10)), 9);
+                SET @City = CASE @i % 4 WHEN 0 THEN 'Bogotá' WHEN 1 THEN 'Medellín' WHEN 2 THEN 'Cali' ELSE 'Barranquilla' END;
+            END
+            ELSE IF @ModCountry = 1
+            BEGIN
+                SET @Country = 'PE';
+                SET @DocType = 'DNI';
+                SET @Phone = '+519' + RIGHT('0000000' + CAST(8000000 + @i AS VARCHAR(10)), 8);
+                SET @City = CASE @i % 3 WHEN 0 THEN 'Lima' WHEN 1 THEN 'Arequipa' ELSE 'Trujillo' END;
+            END
+            ELSE
+            BEGIN
+                SET @Country = 'EC';
+                SET @DocType = 'CEDULA';
+                SET @Phone = '+5939' + RIGHT('0000000' + CAST(9000000 + @i AS VARCHAR(10)), 8);
+                SET @City = CASE @i % 2 WHEN 0 THEN 'Quito' ELSE 'Guayaquil' END;
+            END;
+
+            DECLARE @FnIndex INT = (@i % 20) + 1;
+            DECLARE @LnIndex INT = ((@i * 7) % 20) + 1;
+            DECLARE @Fn NVARCHAR(50) = (SELECT name FROM @FirstNames WHERE idx = @FnIndex);
+            DECLARE @Ln NVARCHAR(50) = (SELECT name FROM @LastNames WHERE idx = @LnIndex);
+            DECLARE @FullPatientName NVARCHAR(200) = @Fn + ' ' + @Ln;
+            DECLARE @PatientEmail NVARCHAR(150) = LOWER(@Fn) + '.' + LOWER(@Ln) + CAST(@i AS NVARCHAR(10)) + '@psp-paciente.org';
+            
+            DECLARE @TreatDate DATE = DATEADD(DAY, -((@i * 3) % 180), '2026-09-01');
+            DECLARE @FollowDays INT = CASE @i % 4 WHEN 0 THEN 15 WHEN 1 THEN 30 WHEN 2 THEN 45 ELSE 60 END;
+            DECLARE @PatientStatus NVARCHAR(20) = CASE WHEN @i % 20 = 0 THEN 'UNREACHABLE' WHEN @i % 40 = 0 THEN 'PENDING' ELSE 'ACTIVE' END;
+            DECLARE @AssignedGestor UNIQUEIDENTIFIER = '22222222-2222-2222-2222-222222222222';
+            IF @i % 2 = 1
+                SET @AssignedGestor = '33333333-3333-3333-3333-333333333333';
+
+            DECLARE @NewGenPatId UNIQUEIDENTIFIER = NEWSEQUENTIALID();
+
+            INSERT INTO dbo.patients (
+                id, full_name, document_type, document_number, country_code,
+                phone, email, city, treatment_start, follow_up_days,
+                status, registration_source, consent_date, created_by, created_at
+            )
+            VALUES (
+                @NewGenPatId, @FullPatientName, @DocType, @DocNum, @Country,
+                @Phone, @PatientEmail, @City, @TreatDate, @FollowDays,
+                @PatientStatus, 'GESTOR', @TreatDate, @AssignedGestor, SYSUTCDATETIME()
+            );
+
+            -- Generar interacciones para pacientes activos (para pruebas de consultas y reportes)
+            IF @PatientStatus = 'ACTIVE' AND (@i % 3 = 0)
+            BEGIN
+                DECLARE @ChannelGen NVARCHAR(20) = CASE @i % 3 WHEN 0 THEN 'PHONE' WHEN 1 THEN 'WHATSAPP' ELSE 'EMAIL' END;
+                DECLARE @ResultGen NVARCHAR(30) = CASE @i % 4 WHEN 0 THEN 'SUCCESSFUL_CONTACT' WHEN 1 THEN 'NO_ANSWER' WHEN 2 THEN 'APPOINTMENT_SCHEDULED' ELSE 'SUCCESSFUL_CONTACT' END;
+                DECLARE @ContactGenDate DATETIME2 = DATEADD(DAY, 10, CAST(@TreatDate AS DATETIME2));
+
+                INSERT INTO dbo.contacts (
+                    id, patient_id, contact_date, channel, result, notes, is_active, registered_by, created_at
+                )
+                VALUES (
+                    NEWSEQUENTIALID(), @NewGenPatId, @ContactGenDate, @ChannelGen, @ResultGen,
+                    'Contacto automático de seguimiento según protocolo inicial.', 1, @AssignedGestor, SYSUTCDATETIME()
+                );
+            END;
+        END;
+
+        SET @i = @i + 1;
+    END;
+
+    PRINT 'Generación opcional de 400 pacientes completada exitosamente.';
+END;
 GO
