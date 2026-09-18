@@ -14,8 +14,8 @@ Cubro **dos criterios de aceptación de punta a punta** (BD → API → UI) más
 
 | Criterio | Qué cubre esta entrega | Capas |
 |---------|----------------------|-------|
-| **CA-1** | Registro de paciente por gestor (nombre, documento, teléfono, correo, ciudad, fecha de inicio, país). Validación de unicidad por `(país, tipo_doc, número_doc)` y formato E.164 en teléfono. | BD + API + UI |
-| **CA-1 — Autorregistro** | Flujo de 2 pasos via URL con token generado por el gestor. Paso 1: el paciente se identifica con nombre y correo (estado `PENDING`). Paso 2: completa documento, teléfono, ciudad y fecha de inicio (estado `ACTIVE`). | BD + API + UI |
+| **CA-1** | Registro de paciente por gestor (nombre, documento, teléfono, correo, ciudad, fecha de inicio, país y días de seguimiento definidos por el área médica). Validación de unicidad por `(país, tipo_doc, número_doc)` y formato E.164 en teléfono. | BD + API + UI |
+| **CA-1 — Autorregistro** | Flujo de 2 pasos via URL con token generado por el gestor. Paso 1: el paciente se identifica con nombre y correo (estado `PENDING`). Paso 2: completa documento, teléfono, ciudad, fecha de inicio y días de seguimiento (estado `ACTIVE`). | BD + API + UI |
 | **CA-2** | Registro de contacto asociado a un paciente: fecha, canal (enum `PHONE/WHATSAPP/EMAIL`), resultado (enum cerrado), notas y gestor que lo registra. Solo se permiten contactos sobre pacientes en estado `ACTIVE`. | BD + API + UI |
 | **CA-3 (patrón de auditoría)** | Endpoint de corrección de contacto con soft-update: el registro original queda `is_active = false` y se crea uno nuevo activo. La tabla `contact_audit_log` almacena snapshot JSON anterior/nuevo, motivo (obligatorio), gestor y timestamp. Sin pantalla UI dedicada en esta entrega. | BD + API |
 
@@ -29,7 +29,7 @@ Esta sección pesa igual que la anterior: dejar algo fuera con criterio vale tan
 |--------------------|---------------|
 | **CA-4** — Vista filtrada del mes | Requiere CA-1 y CA-2 completamente funcionales. La query JOIN (`contacts ⟶ patients ⟶ users`) está diseñada en el modelo y en los índices para que añadirla en la siguiente iteración no requiera cambios de esquema. Se omite para garantizar profundidad sobre anchura. |
 | **CA-5** — Paciente ilocalizable | Bloqueado por H-03: "tres veces consecutivas" no define ventana temporal, si aplica por canal o entre canales, ni quién dispara el cambio de estado. Cualquier implementación sería un supuesto no validado con el PO. El campo `status` en `patients` queda preparado para el valor `UNREACHABLE`. |
-| **CA-6** — Reporte de adherencia | Bloqueado por H-04: el calendario de seguimiento está "pendiente de confirmación con el área médica" según las notas del propio PRD. Sin la regla de negocio del plazo previsto, la fórmula `contactados / activos_al_cierre` no puede calcularse correctamente. El campo `treatment_start` queda en el modelo. |
+| **CA-6** — Reporte de adherencia | Desbloqueado conceptualmente: el área médica define los días de seguimiento (`follow_up_days`) al registrar cada paciente. La fecha límite prevista se calcula como: `treatment_start + follow_up_days`, permitiendo obtener la fórmula: $\text{Adherencia} = (\text{contactados en plazo} / \text{total con plazo vencido}) \times 100$. El campo queda persistido en BD. Se excluye de la UI/API de esta entrega para cumplir la directriz estricta de la prueba de enfocar **máximo 2 criterios de punta a punta** (CA-1 y CA-2). |
 | **Autenticación y roles** | El stack de la prueba no lo exige. Se usa un `userId` del seed de prueba para identificar al gestor en cada operación. En producción se añadiría JWT + middleware de autorización por rol. |
 | **Pantalla de corrección (CA-3 UI)** | El endpoint existe y tiene pruebas. La pantalla se omite para respetar el tope de 2 criterios de punta a punta en UI y asegurar que los que entran quedan completos. |
 
@@ -71,6 +71,7 @@ patients (
   email                NVARCHAR(150)     NOT NULL,
   city                 NVARCHAR(100)     NULL,   -- NULL en paso 1 de autorregistro
   treatment_start      DATE              NULL,   -- NULL en paso 1 de autorregistro
+  follow_up_days       INT               NULL,   -- Días de seguimiento según área médica (input number). Obligatorio al activar
   status               NVARCHAR(20)      NOT NULL  DEFAULT 'PENDING',  -- PENDING | ACTIVE | INACTIVE | UNREACHABLE
   registration_source  NVARCHAR(20)      NOT NULL  DEFAULT 'GESTOR',   -- GESTOR | SELF
   consent_date         DATE              NULL,   -- Campo regulatorio: fecha de consentimiento informado
@@ -174,6 +175,7 @@ El sistema **no realiza UPDATE sobre el registro original**. El flujo completo d
   "email":          "maria@email.com",
   "city":           "Bogotá",
   "treatmentStart": "2026-09-01",
+  "followUpDays":   30,
   "consentDate":    "2026-09-01"
 }
 ```
@@ -183,7 +185,7 @@ El sistema **no realiza UPDATE sobre el registro original**. El flujo completo d
   "id": "uuid", "fullName": "María García López",
   "status": "ACTIVE", "countryCode": "CO",
   "phone": "+573001234567", "email": "maria@email.com",
-  "city": "Bogotá", "treatmentStart": "2026-09-01", "createdAt": "..."
+  "city": "Bogotá", "treatmentStart": "2026-09-01", "followUpDays": 30, "createdAt": "..."
 }
 ```
 **Errores:**
@@ -218,8 +220,8 @@ El sistema **no realiza UPDATE sobre el registro original**. El flujo completo d
 
 #### `PATCH /api/v1/registration-links/{token}/complete` — Paso 2: datos completos
 **Headers:** `Authorization: Bearer {sessionToken}`  
-**Entrada:** `{ "documentType": "CC", "documentNumber": "...", "phone": "+57...", "city": "Cali", "treatmentStart": "2026-09-01" }`  
-**Salida 200:** Objeto paciente completo con `"status": "ACTIVE"` y `"registrationSource": "SELF"`  
+**Entrada:** `{ "documentType": "CC", "documentNumber": "...", "phone": "+57...", "city": "Cali", "treatmentStart": "2026-09-01", "followUpDays": 30 }`  
+**Salida 200:** Objeto paciente completo con `"status": "ACTIVE"`, `"followUpDays": 30` y `"registrationSource": "SELF"`  
 **Errores:** `400` campos · `409` documento duplicado · `422` sessionToken inválido o expirado
 
 ---
