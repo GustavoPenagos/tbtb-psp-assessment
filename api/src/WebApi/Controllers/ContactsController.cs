@@ -50,4 +50,26 @@ public class ContactsController(IContactService contactService) : ControllerBase
         var result = await _contactService.CorrectContactAsync(id, request, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// CA-3 / GxP: Obtener historial de auditoría de contactos asociados a un paciente.
+    /// </summary>
+    [HttpGet("patient/{patientId:guid}/audit")]
+    [ProducesResponseType(typeof(IEnumerable<AuditLogResponseDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAuditByPatient(Guid patientId, CancellationToken cancellationToken)
+    {
+        var logs = await _contactService.GetAuditByPatientIdAsync(patientId, cancellationToken);
+        return Ok(logs);
+    }
+
+    /// <summary>
+    /// CA-3 / GxP: Obtener historial de auditoría de un contacto específico.
+    /// </summary>
+    [HttpGet("{id:guid}/audit")]
+    [ProducesResponseType(typeof(IEnumerable<AuditLogResponseDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAuditByContact(Guid id, CancellationToken cancellationToken)
+    {
+        var logs = await _contactService.GetAuditByContactIdAsync(id, cancellationToken);
+        return Ok(logs);
+    }
 }

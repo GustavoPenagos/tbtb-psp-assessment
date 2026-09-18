@@ -31,7 +31,8 @@ export class PatientDirectoryComponent implements OnInit {
   public selectedCountry: string = '';
   public selectedStatus: string = '';
   public pageNumber: number = 1;
-  public pageSize: number = 50;
+  public pageSize: number = 15;
+  public totalPages: number = 1;
 
   ngOnInit(): void {
     this.loadPatients();
@@ -48,6 +49,7 @@ export class PatientDirectoryComponent implements OnInit {
       next: (res) => {
         this.patients = res.items;
         this.totalCount = res.totalCount;
+        this.totalPages = Math.ceil(this.totalCount / this.pageSize) || 1;
         this.applySearchFilter();
         this.isLoading = false;
       },
@@ -60,6 +62,67 @@ export class PatientDirectoryComponent implements OnInit {
   onFilterChange(): void {
     this.pageNumber = 1;
     this.loadPatients();
+  }
+
+  goToPage(page: number): void {
+    if (page < 1 || page > this.totalPages || page === this.pageNumber) {
+      return;
+    }
+    this.pageNumber = page;
+    this.loadPatients();
+  }
+
+  nextPage(): void {
+    if (this.pageNumber < this.totalPages) {
+      this.pageNumber++;
+      this.loadPatients();
+    }
+  }
+
+  prevPage(): void {
+    if (this.pageNumber > 1) {
+      this.pageNumber--;
+      this.loadPatients();
+    }
+  }
+
+  firstPage(): void {
+    if (this.pageNumber !== 1) {
+      this.pageNumber = 1;
+      this.loadPatients();
+    }
+  }
+
+  lastPage(): void {
+    if (this.pageNumber !== this.totalPages) {
+      this.pageNumber = this.totalPages;
+      this.loadPatients();
+    }
+  }
+
+  getStartIndex(): number {
+    if (this.totalCount === 0) return 0;
+    return (this.pageNumber - 1) * this.pageSize + 1;
+  }
+
+  getEndIndex(): number {
+    return Math.min(this.pageNumber * this.pageSize, this.totalCount);
+  }
+
+  getVisiblePages(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, this.pageNumber - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(this.totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
   }
 
   applySearchFilter(): void {

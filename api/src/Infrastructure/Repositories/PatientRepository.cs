@@ -75,7 +75,7 @@ public class PatientRepository : IPatientRepository
         parameters.Add("@CountryCode", string.IsNullOrWhiteSpace(countryCode) ? null : countryCode, DbType.AnsiStringFixedLength, ParameterDirection.Input, 2);
         parameters.Add("@Status", string.IsNullOrWhiteSpace(status) ? null : status, DbType.String, ParameterDirection.Input, 20);
         parameters.Add("@PageNumber", pageNumber < 1 ? 1 : pageNumber, DbType.Int32);
-        parameters.Add("@PageSize", pageSize < 1 ? 20 : pageSize, DbType.Int32);
+        parameters.Add("@PageSize", pageSize <= 0 ? 15 : pageSize, DbType.Int32);
 
         var command = new CommandDefinition(
             "dbo.sp_GetPatients",

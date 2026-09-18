@@ -111,6 +111,58 @@ public class ContactRepository : IContactRepository
         }
     }
 
+    public async Task<IEnumerable<ContactAuditLog>> GetAuditByPatientIdAsync(Guid patientId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        var parameters = new DynamicParameters();
+        parameters.Add("@PatientId", patientId, DbType.Guid);
+
+        var command = new CommandDefinition(
+            "dbo.sp_GetContactAuditByPatient",
+            parameters,
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        var records = await connection.QueryAsync<ContactAuditRecord>(command);
+        return records.Select(r => new ContactAuditLog
+        {
+            Id = r.id,
+            ContactId = r.contact_id,
+            ChangedBy = r.changed_by,
+            ChangedByName = r.changed_by_name,
+            ChangedAt = r.changed_at,
+            Reason = r.reason,
+            PreviousValue = r.previous_value,
+            NewValue = r.new_value
+        });
+    }
+
+    public async Task<IEnumerable<ContactAuditLog>> GetAuditByContactIdAsync(Guid contactId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _connectionFactory.CreateConnection();
+        var parameters = new DynamicParameters();
+        parameters.Add("@ContactId", contactId, DbType.Guid);
+
+        var command = new CommandDefinition(
+            "dbo.sp_GetContactAuditHistory",
+            parameters,
+            commandType: CommandType.StoredProcedure,
+            cancellationToken: cancellationToken);
+
+        var records = await connection.QueryAsync<ContactAuditRecord>(command);
+        return records.Select(r => new ContactAuditLog
+        {
+            Id = r.id,
+            ContactId = r.contact_id,
+            ChangedBy = r.changed_by,
+            ChangedByName = r.changed_by_name,
+            ChangedAt = r.changed_at,
+            Reason = r.reason,
+            PreviousValue = r.previous_value,
+            NewValue = r.new_value
+        });
+    }
+
     private sealed class ContactRecord
     {
         public Guid id { get; set; }
@@ -123,5 +175,17 @@ public class ContactRepository : IContactRepository
         public Guid registered_by { get; set; }
         public string registered_by_name { get; set; } = string.Empty;
         public DateTime created_at { get; set; }
+    }
+
+    private sealed class ContactAuditRecord
+    {
+        public Guid id { get; set; }
+        public Guid contact_id { get; set; }
+        public Guid changed_by { get; set; }
+        public string changed_by_name { get; set; } = string.Empty;
+        public DateTime changed_at { get; set; }
+        public string reason { get; set; } = string.Empty;
+        public string previous_value { get; set; } = string.Empty;
+        public string new_value { get; set; } = string.Empty;
     }
 }

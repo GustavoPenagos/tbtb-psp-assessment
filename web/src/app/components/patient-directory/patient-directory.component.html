@@ -4,11 +4,11 @@
     <div>
       <div class="badge-row">
         <span class="badge badge--blue">Directorio Centralizado</span>
-        <span class="badge badge--count">{{ totalCount }} Pacientes</span>
+        <span class="badge badge--count">{{ totalCount }} Pacientes en BD</span>
       </div>
       <h2 class="directory-card__title">Directorio de Pacientes</h2>
       <p class="directory-card__subtitle">
-        Consulta activa con filtros regionales (CO, PE, EC) y columna de correo electrónico visible.
+        Paginación optimizada a 15 registros por vista para alta velocidad con acceso a la totalidad de pacientes.
       </p>
     </div>
 
@@ -60,7 +60,7 @@
     @if (isLoading) {
       <div class="loading-state">
         <div class="spinner"></div>
-        <p>Cargando registros de pacientes desde SQL Server...</p>
+        <p>Cargando pacientes desde SQL Server (15 por vista)...</p>
       </div>
     } @else if (filteredPatients.length === 0) {
       <div class="empty-state">
@@ -164,6 +164,69 @@
           }
         </tbody>
       </table>
+
+      <!-- BARRA DE PAGINACIÓN CLÍNICA (15 PACIENTES POR PÁGINA) -->
+      @if (totalCount > 0) {
+        <div class="pagination-bar">
+          <div class="pagination-bar__info">
+            Mostrando <strong>{{ getStartIndex() }} - {{ getEndIndex() }}</strong> de <strong>{{ totalCount }}</strong> pacientes en base de datos
+            <span class="pagination-bar__chip">15 por página</span>
+          </div>
+
+          <div class="pagination-bar__controls">
+            <button
+              type="button"
+              class="pg-btn pg-btn--nav"
+              [disabled]="pageNumber === 1"
+              (click)="firstPage()"
+              title="Primera página"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              class="pg-btn pg-btn--nav"
+              [disabled]="pageNumber === 1"
+              (click)="prevPage()"
+              title="Página anterior"
+            >
+              ‹ Anterior
+            </button>
+
+            <div class="pg-numbers">
+              @for (p of getVisiblePages(); track p) {
+                <button
+                  type="button"
+                  class="pg-btn pg-btn--num"
+                  [class.pg-btn--active]="p === pageNumber"
+                  (click)="goToPage(p)"
+                >
+                  {{ p }}
+                </button>
+              }
+            </div>
+
+            <button
+              type="button"
+              class="pg-btn pg-btn--nav"
+              [disabled]="pageNumber === totalPages"
+              (click)="nextPage()"
+              title="Página siguiente"
+            >
+              Siguiente ›
+            </button>
+            <button
+              type="button"
+              class="pg-btn pg-btn--nav"
+              [disabled]="pageNumber === totalPages"
+              (click)="lastPage()"
+              title="Última página"
+            >
+              »
+            </button>
+          </div>
+        </div>
+      }
     }
   </div>
 </div>

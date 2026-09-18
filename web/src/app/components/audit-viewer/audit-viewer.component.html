@@ -24,10 +24,18 @@
     <button
       type="button"
       class="tab-btn"
-      [class.tab-btn--active]="activeTab === 'audits'"
-      (click)="activeTab = 'audits'"
+      [class.tab-btn--active]="activeTab === 'contact-audit'"
+      (click)="activeTab = 'contact-audit'"
     >
-      Traza de Cambios ({{ auditHistory.length }})
+      📞 Traza de Contactos ({{ contactAudits.length }})
+    </button>
+    <button
+      type="button"
+      class="tab-btn"
+      [class.tab-btn--active]="activeTab === 'patient-audit'"
+      (click)="activeTab = 'patient-audit'"
+    >
+      👤 Traza de Paciente ({{ patientAudits.length }})
     </button>
     <button
       type="button"
@@ -35,7 +43,7 @@
       [class.tab-btn--active]="activeTab === 'contacts'"
       (click)="activeTab = 'contacts'"
     >
-      Historial de Contactos ({{ contacts.length }})
+      📋 Contactos Registrados ({{ contacts.length }})
     </button>
   </div>
 
@@ -45,17 +53,73 @@
         <div class="spinner spinner--dark"></div>
         <p>Cargando registros forenses de base de datos...</p>
       </div>
-    } @else if (activeTab === 'audits') {
-      <!-- HISTORIAL DE AUDITORÍA CON CHIPS ROJO VS VERDE -->
-      @if (auditHistory.length === 0) {
+    } @else if (activeTab === 'contact-audit') {
+      <!-- HISTORIAL DE AUDITORÍA DE CONTACTOS (contact_audit_log) -->
+      @if (contactAudits.length === 0) {
+        <div class="empty-state">
+          <div class="empty-state__icon">📞</div>
+          <h4>Sin registros de auditoría de contactos</h4>
+          <p>No se registran eventos de creación o corrección auditada para este paciente.</p>
+        </div>
+      } @else {
+        <div class="timeline">
+          @for (log of contactAudits; track log.id) {
+            <div class="timeline-item">
+              <div class="timeline-item__marker"></div>
+              <div class="timeline-item__card">
+                <div class="timeline-item__meta">
+                  <span class="meta-date">
+                    🕒 {{ log.changedAt | date:'dd/MM/yyyy HH:mm:ss' }} UTC
+                  </span>
+                  <span class="meta-user">
+                    👤 Registrado por: <strong>{{ log.changedByName || 'Gestor Clínico' }}</strong>
+                  </span>
+                  <span class="badge" [class.badge--blue]="log.reason.includes('Registro inicial')" [class.badge--purple]="!log.reason.includes('Registro inicial')">
+                    {{ log.reason.includes('Registro inicial') ? 'CREACIÓN' : 'CORRECCIÓN' }}
+                  </span>
+                </div>
+
+                <div class="timeline-item__reason">
+                  <span class="reason-label">Justificación Regulatoria / Acción:</span>
+                  <p class="reason-text">"{{ log.reason }}"</p>
+                </div>
+
+                <!-- CHIPS COMPARATIVOS: ROJO TACHADO VS VERDE -->
+                <div class="diff-container">
+                  <div class="diff-header">Datos del Contacto Registrados / Auditados:</div>
+                  @for (diff of log.diffs; track diff.field) {
+                    <div class="diff-row">
+                      <span class="diff-field">{{ diff.field }}:</span>
+                      <div class="diff-chips">
+                        @if (diff.oldValue !== '(vacío)') {
+                          <span class="chip chip--old" title="Valor anterior">
+                            <span class="strikethrough">{{ diff.oldValue }}</span>
+                          </span>
+                          <span class="diff-arrow">➔</span>
+                        }
+                        <span class="chip chip--new" title="Valor registrado">
+                          {{ diff.newValue }}
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    } @else if (activeTab === 'patient-audit') {
+      <!-- HISTORIAL DE AUDITORÍA DE PACIENTE (patient_audit_log) -->
+      @if (patientAudits.length === 0) {
         <div class="empty-state">
           <div class="empty-state__icon">📋</div>
-          <h4>Sin modificaciones registradas</h4>
+          <h4>Sin modificaciones en datos de paciente</h4>
           <p>Este paciente conserva sus valores originales de registro sin alteraciones auditadas.</p>
         </div>
       } @else {
         <div class="timeline">
-          @for (log of auditHistory; track log.id) {
+          @for (log of patientAudits; track log.id) {
             <div class="timeline-item">
               <div class="timeline-item__marker"></div>
               <div class="timeline-item__card">

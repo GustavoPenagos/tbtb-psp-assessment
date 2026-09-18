@@ -139,17 +139,31 @@
 
             <div class="form-row">
               <div class="form-group">
-                <label for="selfPhone" class="form-label">Teléfono de Contacto (E.164) <span class="required">*</span></label>
-                <input
-                  id="selfPhone"
-                  type="text"
-                  class="form-control"
-                  formControlName="phone"
-                  placeholder="+573001234567"
-                />
-                <span class="form-hint">Incluya el prefijo (+57, +51, +593).</span>
-                @if (step2Form.get('phone')?.invalid && step2Form.get('phone')?.touched) {
-                  <div class="form-error">Formato E.164 válido requerido.</div>
+                <label for="selfPhoneNumber" class="form-label">Teléfono de Contacto (E.164) <span class="required">*</span></label>
+                <div class="phone-input-group">
+                  <select
+                    id="selfPhonePrefix"
+                    class="form-select phone-prefix-select"
+                    formControlName="phonePrefix"
+                    (change)="onPhonePrefixChange($event)"
+                    title="Seleccionar indicativo del país"
+                  >
+                    @for (c of countries; track c.code) {
+                      <option [value]="c.prefix">{{ c.flag }} {{ c.prefix }} ({{ c.code }})</option>
+                    }
+                  </select>
+                  <input
+                    id="selfPhoneNumber"
+                    type="tel"
+                    class="form-control phone-number-input"
+                    formControlName="phoneNumber"
+                    placeholder="Ej: 3001234567"
+                    maxlength="12"
+                  />
+                </div>
+                <span class="form-hint">E.164: <strong>{{ step2Form.get('phonePrefix')?.value }}{{ step2Form.get('phoneNumber')?.value || '...' }}</strong></span>
+                @if (step2Form.get('phoneNumber')?.invalid && step2Form.get('phoneNumber')?.touched) {
+                  <div class="form-error">Debe ingresar un número de teléfono válido (7 a 12 dígitos).</div>
                 }
               </div>
 

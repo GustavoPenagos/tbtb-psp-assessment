@@ -23,6 +23,8 @@ public interface IContactRepository
     Task<Guid> CreateAsync(Contact contact, CancellationToken cancellationToken = default);
     Task<IEnumerable<Contact>> GetByPatientIdAsync(Guid patientId, CancellationToken cancellationToken = default);
     Task<Guid> CorrectAsync(Guid originalContactId, Guid changedBy, DateTime newDate, string newChannel, string newResult, string? newNotes, string reason, CancellationToken cancellationToken = default);
+    Task<IEnumerable<ContactAuditLog>> GetAuditByPatientIdAsync(Guid patientId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<ContactAuditLog>> GetAuditByContactIdAsync(Guid contactId, CancellationToken cancellationToken = default);
 }
 
 public interface IRegistrationLinkRepository
@@ -47,6 +49,8 @@ public interface IContactService
     Task<ContactResponseDto> CreateContactAsync(ContactCreateRequestDto request, CancellationToken cancellationToken = default);
     Task<IEnumerable<ContactResponseDto>> GetContactsByPatientIdAsync(Guid patientId, CancellationToken cancellationToken = default);
     Task<ContactResponseDto> CorrectContactAsync(Guid originalContactId, ContactCorrectRequestDto request, CancellationToken cancellationToken = default);
+    Task<IEnumerable<AuditLogResponseDto>> GetAuditByPatientIdAsync(Guid patientId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<AuditLogResponseDto>> GetAuditByContactIdAsync(Guid contactId, CancellationToken cancellationToken = default);
 }
 
 public interface IRegistrationService

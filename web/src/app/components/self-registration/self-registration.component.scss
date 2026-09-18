@@ -302,6 +302,28 @@
   }
 }
 
+.phone-input-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+
+  .phone-prefix-select {
+    flex: 0 0 125px;
+    font-weight: 600;
+    color: #1e3a8a;
+    background-color: #f8fafc;
+    border-color: #cbd5e1;
+    cursor: pointer;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .phone-number-input {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
 .form-hint {
   font-size: 0.75rem;
   color: #64748b;

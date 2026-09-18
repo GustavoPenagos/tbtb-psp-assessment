@@ -34,7 +34,7 @@ public class PatientsController(IPatientService patientService) : ControllerBase
         [FromQuery] string? countryCode,
         [FromQuery] string? status,
         [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery] int pageSize = 15,
         CancellationToken cancellationToken = default)
     {
         var result = await _patientService.GetPatientsPagedAsync(countryCode, status, pageNumber, pageSize, cancellationToken);

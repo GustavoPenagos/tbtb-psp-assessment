@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges, inject } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Patient, PatientStatus, PatientUpdateRequest } from '../../core/models/models';
+import { CountryCode, Patient, PatientStatus, PatientUpdateRequest } from '../../core/models/models';
 import { PatientService } from '../../core/services/patient.service';
 import { ToastService } from '../../core/services/toast.service';
 
@@ -26,8 +26,15 @@ export class PatientEditModalComponent implements OnChanges {
 
   public readonly statuses: PatientStatus[] = ['ACTIVE', 'INACTIVE', 'UNREACHABLE', 'PENDING'];
 
+  public readonly countries: { code: CountryCode; label: string; prefix: string; flag: string }[] = [
+    { code: 'CO', label: 'Colombia', prefix: '+57', flag: '🇨🇴' },
+    { code: 'PE', label: 'Perú', prefix: '+51', flag: '🇵🇪' },
+    { code: 'EC', label: 'Ecuador', prefix: '+593', flag: '🇪🇨' }
+  ];
+
   public form: FormGroup = this.fb.group({
-    phone: ['', [Validators.required, Validators.pattern(/^\+[1-9]\d{6,14}$/)]],
+    phonePrefix: ['+57', [Validators.required]],
+    phoneNumber: ['', [Validators.required, Validators.pattern(/^[0-9]{7,12}$/)]],
     city: ['', [Validators.required]],
     followUpDays: [30, [Validators.required, Validators.min(1)]],
     status: ['ACTIVE' as PatientStatus, [Validators.required]],
@@ -36,14 +43,35 @@ export class PatientEditModalComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['patient'] && this.patient) {
+      const { prefix, number } = this.parsePhone(this.patient.phone, this.patient.countryCode);
       this.form.patchValue({
-        phone: this.patient.phone || '',
+        phonePrefix: prefix,
+        phoneNumber: number,
         city: this.patient.city || '',
         followUpDays: this.patient.followUpDays || 30,
         status: this.patient.status,
         reason: ''
       });
     }
+  }
+
+  private parsePhone(phone: string | null, countryCode?: string): { prefix: string; number: string } {
+    if (!phone) {
+      const defaultMeta = this.countries.find(c => c.code === countryCode) || this.countries[0];
+      return { prefix: defaultMeta.prefix, number: '' };
+    }
+    const clean = phone.trim();
+    if (clean.startsWith('+593')) {
+      return { prefix: '+593', number: clean.substring(4) };
+    }
+    if (clean.startsWith('+57')) {
+      return { prefix: '+57', number: clean.substring(3) };
+    }
+    if (clean.startsWith('+51')) {
+      return { prefix: '+51', number: clean.substring(3) };
+    }
+    const meta = this.countries.find(c => c.code === countryCode) || this.countries[0];
+    return { prefix: meta.prefix, number: clean.replace(/^\+/, '') };
   }
 
   get reasonLength(): number {
@@ -69,7 +97,7 @@ export class PatientEditModalComponent implements OnChanges {
     const val = this.form.getRawValue();
 
     const request: PatientUpdateRequest = {
-      phone: val.phone.trim(),
+      phone: `${val.phonePrefix}${val.phoneNumber.trim()}`,
       city: val.city.trim(),
       followUpDays: Number(val.followUpDays),
       status: val.status as PatientStatus,

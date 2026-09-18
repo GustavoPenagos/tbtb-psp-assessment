@@ -32,7 +32,8 @@ export class PatientRegisterComponent {
     fullName: ['', [Validators.required, Validators.maxLength(200)]],
     documentType: ['CC' as DocumentType, [Validators.required]],
     documentNumber: ['', [Validators.required, Validators.pattern(/^[0-9A-Za-z-]{5,20}$/)]],
-    phone: ['+57', [Validators.required, Validators.pattern(/^\+[1-9]\d{6,14}$/)]],
+    phonePrefix: ['+57', [Validators.required]],
+    phoneNumber: ['', [Validators.required, Validators.pattern(/^[0-9]{7,12}$/)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(150)]],
     city: ['', [Validators.required, Validators.maxLength(100)]],
     treatmentStart: [new Date().toISOString().substring(0, 10), [Validators.required]],
@@ -46,7 +47,18 @@ export class PatientRegisterComponent {
     if (meta) {
       this.form.patchValue({
         documentType: meta.docType,
-        phone: meta.prefix
+        phonePrefix: meta.prefix
+      });
+    }
+  }
+
+  onPhonePrefixChange(event: Event): void {
+    const selectedPrefix = (event.target as HTMLSelectElement).value;
+    const meta = this.countries.find(c => c.prefix === selectedPrefix);
+    if (meta) {
+      this.form.patchValue({
+        countryCode: meta.code,
+        documentType: meta.docType
       });
     }
   }
@@ -65,7 +77,7 @@ export class PatientRegisterComponent {
       fullName: val.fullName.trim(),
       documentType: val.documentType as DocumentType,
       documentNumber: val.documentNumber.trim(),
-      phone: val.phone.trim(),
+      phone: `${val.phonePrefix}${val.phoneNumber.trim()}`,
       email: val.email.trim().toLowerCase(),
       city: val.city.trim(),
       treatmentStart: val.treatmentStart,
@@ -96,7 +108,8 @@ export class PatientRegisterComponent {
       fullName: '',
       documentType: 'CC',
       documentNumber: '',
-      phone: '+57',
+      phonePrefix: '+57',
+      phoneNumber: '',
       email: '',
       city: '',
       treatmentStart: new Date().toISOString().substring(0, 10),

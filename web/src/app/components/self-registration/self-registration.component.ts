@@ -27,6 +27,12 @@ export class SelfRegistrationComponent implements OnInit {
   public isSubmitting: boolean = false;
   public completedPatient: Patient | null = null;
 
+  public readonly countries: { code: CountryCode; label: string; prefix: string; docType: DocumentType; flag: string }[] = [
+    { code: 'CO', label: 'Colombia', prefix: '+57', docType: 'CC', flag: '🇨🇴' },
+    { code: 'PE', label: 'Perú', prefix: '+51', docType: 'DNI', flag: '🇵🇪' },
+    { code: 'EC', label: 'Ecuador', prefix: '+593', docType: 'CEDULA', flag: '🇪🇨' }
+  ];
+
   public step1Form: FormGroup = this.fb.group({
     countryCode: ['CO' as CountryCode, [Validators.required]],
     fullName: ['', [Validators.required, Validators.maxLength(200)]],
@@ -36,7 +42,8 @@ export class SelfRegistrationComponent implements OnInit {
   public step2Form: FormGroup = this.fb.group({
     documentType: ['CC' as DocumentType, [Validators.required]],
     documentNumber: ['', [Validators.required, Validators.pattern(/^[0-9A-Za-z-]{5,20}$/)]],
-    phone: ['+57', [Validators.required, Validators.pattern(/^\+[1-9]\d{6,14}$/)]],
+    phonePrefix: ['+57', [Validators.required]],
+    phoneNumber: ['', [Validators.required, Validators.pattern(/^[0-9]{7,12}$/)]],
     city: ['', [Validators.required]],
     treatmentStart: [new Date().toISOString().substring(0, 10), [Validators.required]],
     followUpDays: [30, [Validators.required, Validators.min(1)]],
@@ -80,21 +87,23 @@ export class SelfRegistrationComponent implements OnInit {
 
   onCountryChange(event: Event): void {
     const code = (event.target as HTMLSelectElement).value as CountryCode;
-    let docType: DocumentType = 'CC';
-    let prefix = '+57';
-
-    if (code === 'PE') {
-      docType = 'DNI';
-      prefix = '+51';
-    } else if (code === 'EC') {
-      docType = 'CEDULA';
-      prefix = '+593';
+    const meta = this.countries.find(c => c.code === code);
+    if (meta) {
+      this.step2Form.patchValue({
+        documentType: meta.docType,
+        phonePrefix: meta.prefix
+      });
     }
+  }
 
-    this.step2Form.patchValue({
-      documentType: docType,
-      phone: prefix
-    });
+  onPhonePrefixChange(event: Event): void {
+    const selectedPrefix = (event.target as HTMLSelectElement).value;
+    const meta = this.countries.find(c => c.prefix === selectedPrefix);
+    if (meta) {
+      this.step2Form.patchValue({
+        documentType: meta.docType
+      });
+    }
   }
 
   submitStep1(): void {
@@ -115,6 +124,13 @@ export class SelfRegistrationComponent implements OnInit {
     this.regService.identify(this.token, request).subscribe({
       next: () => {
         this.isSubmitting = false;
+        const meta = this.countries.find(c => c.code === val.countryCode);
+        if (meta) {
+          this.step2Form.patchValue({
+            documentType: meta.docType,
+            phonePrefix: meta.prefix
+          });
+        }
         this.currentStep = 2;
         this.toastService.info('Paso 1 Completado', 'Por favor complete sus datos médicos para finalizar el registro.');
       },
@@ -136,7 +152,7 @@ export class SelfRegistrationComponent implements OnInit {
     const request: SelfRegCompleteRequest = {
       documentType: val.documentType as DocumentType,
       documentNumber: val.documentNumber.trim(),
-      phone: val.phone.trim(),
+      phone: `${val.phonePrefix}${val.phoneNumber.trim()}`,
       city: val.city.trim(),
       treatmentStart: val.treatmentStart,
       followUpDays: Number(val.followUpDays),

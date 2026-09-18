@@ -112,7 +112,7 @@ END;
 GO
 
 -- ----------------------------------------------------------------------------
--- SP: sp_GetPatients (Consulta con filtros y paginación)
+-- SP: sp_GetPatients (Consulta con filtros y paginación optimizada a 15 registros)
 -- ----------------------------------------------------------------------------
 SET ANSI_NULLS ON;
 GO
@@ -122,22 +122,46 @@ CREATE OR ALTER PROCEDURE dbo.sp_GetPatients
     @CountryCode CHAR(2) = NULL,
     @Status NVARCHAR(20) = NULL,
     @PageNumber INT = 1,
-    @PageSize INT = 20
+    @PageSize INT = 15
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    SELECT id, full_name, document_type, document_number, country_code,
-           phone, email, city, treatment_start, follow_up_days,
-           status, registration_source, consent_date, created_by,
-           created_at, updated_at,
-           COUNT(*) OVER() AS total_count
+    -- 1. Calcular el total global de registros que coinciden con los filtros en base de datos
+    DECLARE @TotalCount INT;
+    SELECT @TotalCount = COUNT(*)
     FROM dbo.patients
     WHERE (@CountryCode IS NULL OR country_code = @CountryCode)
-      AND (@Status IS NULL OR status = @Status)
-    ORDER BY created_at DESC
-    OFFSET (@PageNumber - 1) * @PageSize ROWS
-    FETCH NEXT @PageSize ROWS ONLY;
+      AND (@Status IS NULL OR status = @Status);
+
+    -- 2. Si @PageSize <= 0, retornar la totalidad de pacientes
+    IF @PageSize <= 0
+    BEGIN
+        SELECT id, full_name, document_type, document_number, country_code,
+               phone, email, city, treatment_start, follow_up_days,
+               status, registration_source, consent_date, created_by,
+               created_at, updated_at,
+               @TotalCount AS total_count
+        FROM dbo.patients
+        WHERE (@CountryCode IS NULL OR country_code = @CountryCode)
+          AND (@Status IS NULL OR status = @Status)
+        ORDER BY created_at DESC;
+    END
+    ELSE
+    BEGIN
+        -- 3. Retornar únicamente la página solicitada (por defecto 15 registros) para mínimo tiempo de respuesta
+        SELECT id, full_name, document_type, document_number, country_code,
+               phone, email, city, treatment_start, follow_up_days,
+               status, registration_source, consent_date, created_by,
+               created_at, updated_at,
+               @TotalCount AS total_count
+        FROM dbo.patients
+        WHERE (@CountryCode IS NULL OR country_code = @CountryCode)
+          AND (@Status IS NULL OR status = @Status)
+        ORDER BY created_at DESC
+        OFFSET (@PageNumber - 1) * @PageSize ROWS
+        FETCH NEXT @PageSize ROWS ONLY;
+    END;
 END;
 GO
 
@@ -517,6 +541,31 @@ BEGIN
             1, @RegisteredBy, SYSUTCDATETIME()
         );
 
+        -- Obtener el nombre del gestor/usuario a partir de @RegisteredBy
+        DECLARE @RegisteredByName NVARCHAR(150);
+        SELECT @RegisteredByName = name FROM dbo.users WHERE id = @RegisteredBy;
+
+        -- Generar snapshot JSON omitiendo patient_id y trayendo el nombre del autor (GxP / ALCOA+)
+        DECLARE @NewJson NVARCHAR(MAX) = (
+            SELECT @NewContactId AS id,
+                   @ContactDate AS contact_date,
+                   @Channel AS channel,
+                   @Result AS result,
+                   @Notes AS notes,
+                   COALESCE(@RegisteredByName, CAST(@RegisteredBy AS NVARCHAR(150))) AS registered_by,
+                   1 AS is_active
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        INSERT INTO dbo.contact_audit_log (
+            id, contact_id, changed_by, changed_at, reason, previous_value, new_value
+        )
+        VALUES (
+            NEWID(), @NewContactId, @RegisteredBy, SYSUTCDATETIME(),
+            'Registro inicial de contacto con paciente',
+            '{}', @NewJson
+        );
+
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -578,17 +627,22 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        -- 1. Validar motivo obligatorio
-        IF @Reason IS NULL OR LTRIM(RTRIM(@Reason)) = ''
-            THROW 50040, 'Reason is required for contact correction.', 1;
+        -- 1. Validar motivo obligatorio >= 10 caracteres (GxP / CA-3)
+        IF @Reason IS NULL OR LEN(LTRIM(RTRIM(@Reason))) < 10
+            THROW 50040, 'Reason is required and must be at least 10 characters long.', 1;
 
-        -- 2. Validar existencia de contacto original activo
+        -- 2. Validar existencia de contacto original activo y obtener snapshot previo
         DECLARE @PatientId UNIQUEIDENTIFIER, @PrevJson NVARCHAR(MAX);
-        SELECT @PatientId = patient_id,
-               @PrevJson = (SELECT id, patient_id, contact_date, channel, result, notes, registered_by, created_at 
+        SELECT @PatientId = c.patient_id,
+               @PrevJson = (SELECT c.id, c.contact_date, c.channel, c.result, c.notes,
+                                   COALESCE(u.name, CAST(c.registered_by AS NVARCHAR(150))) AS registered_by,
+                                   c.created_at 
+                            FROM dbo.contacts c_inner
+                            LEFT JOIN dbo.users u ON u.id = c_inner.registered_by
+                            WHERE c_inner.id = c.id
                             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
-        FROM dbo.contacts 
-        WHERE id = @OriginalContactId AND is_active = 1;
+        FROM dbo.contacts c 
+        WHERE c.id = @OriginalContactId AND c.is_active = 1;
 
         IF @PatientId IS NULL
             THROW 50041, 'Contact not found or has already been corrected.', 1;
@@ -609,10 +663,14 @@ BEGIN
             1, @ChangedBy, SYSUTCDATETIME()
         );
 
-        -- 5. Generar snapshot del nuevo registro e insertar auditoría inmutable
+        -- 5. Obtener nombre del usuario que realiza la corrección y generar snapshot
+        DECLARE @ChangedByName NVARCHAR(150);
+        SELECT @ChangedByName = name FROM dbo.users WHERE id = @ChangedBy;
+
         DECLARE @NewJson NVARCHAR(MAX) = (
-            SELECT @NewContactId AS id, @PatientId AS patient_id, @NewContactDate AS contact_date, 
-                   @NewChannel AS channel, @NewResult AS result, @NewNotes AS notes, @ChangedBy AS registered_by 
+            SELECT @NewContactId AS id, @NewContactDate AS contact_date, 
+                   @NewChannel AS channel, @NewResult AS result, @NewNotes AS notes, 
+                   COALESCE(@ChangedByName, CAST(@ChangedBy AS NVARCHAR(150))) AS registered_by 
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
         );
 
@@ -630,6 +688,52 @@ BEGIN
             ROLLBACK TRANSACTION;
         THROW;
     END CATCH
+END;
+GO
+
+-- ----------------------------------------------------------------------------
+-- SP: sp_GetContactAuditByPatient (Historial de auditoría de contactos de un paciente)
+-- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+CREATE OR ALTER PROCEDURE dbo.sp_GetContactAuditByPatient
+    @PatientId UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT a.id, a.contact_id, a.changed_by, u.name AS changed_by_name,
+           a.changed_at, a.reason, a.previous_value, a.new_value
+    FROM dbo.contact_audit_log a
+    INNER JOIN dbo.contacts c ON a.contact_id = c.id
+    INNER JOIN dbo.users u ON a.changed_by = u.id
+    WHERE c.patient_id = @PatientId
+    ORDER BY a.changed_at DESC;
+END;
+GO
+
+-- ----------------------------------------------------------------------------
+-- SP: sp_GetContactAuditHistory (Historial de auditoría de un contacto específico)
+-- ----------------------------------------------------------------------------
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+CREATE OR ALTER PROCEDURE dbo.sp_GetContactAuditHistory
+    @ContactId UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT a.id, a.contact_id, a.changed_by, u.name AS changed_by_name,
+           a.changed_at, a.reason, a.previous_value, a.new_value
+    FROM dbo.contact_audit_log a
+    INNER JOIN dbo.contacts c ON a.contact_id = c.id
+    INNER JOIN dbo.users u ON a.changed_by = u.id
+    WHERE a.contact_id = @ContactId
+    ORDER BY a.changed_at DESC;
 END;
 GO
 

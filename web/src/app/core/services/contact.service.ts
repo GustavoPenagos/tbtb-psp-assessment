@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Contact, ContactCorrectRequest, ContactCreateRequest } from '../models/models';
+import { AuditLogItem, Contact, ContactCorrectRequest, ContactCreateRequest } from '../models/models';
 
 @Injectable({
   providedIn: 'root'
@@ -20,5 +20,13 @@ export class ContactService {
 
   correctContact(originalContactId: string, request: ContactCorrectRequest): Observable<Contact> {
     return this.http.put<Contact>(`${this.apiUrl}/${originalContactId}/correct`, request);
+  }
+
+  getContactAuditByPatient(patientId: string): Observable<AuditLogItem[]> {
+    return this.http.get<AuditLogItem[]>(`${this.apiUrl}/patient/${patientId}/audit`);
+  }
+
+  getContactAudit(contactId: string): Observable<AuditLogItem[]> {
+    return this.http.get<AuditLogItem[]>(`${this.apiUrl}/${contactId}/audit`);
   }
 }

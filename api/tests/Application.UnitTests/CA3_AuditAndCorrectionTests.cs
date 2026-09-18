@@ -187,4 +187,76 @@ public class CA3_AuditAndCorrectionTests
         await act.Should().ThrowAsync<ValidationException>()
             .Where(e => e.Errors.ContainsKey("Status"));
     }
+
+    [Fact]
+    public async Task CA3_GetContactAuditByPatient_ReturnsAuditLogs()
+    {
+        // Arrange
+        var patientId = Guid.NewGuid();
+        var contactId = Guid.NewGuid();
+        var changedBy = Guid.NewGuid();
+
+        var logs = new List<ContactAuditLog>
+        {
+            new ContactAuditLog
+            {
+                Id = Guid.NewGuid(),
+                ContactId = contactId,
+                ChangedBy = changedBy,
+                ChangedByName = "Gestor Clínico",
+                ChangedAt = DateTime.UtcNow,
+                Reason = "Corrección de resultado de contacto reportado erróneamente",
+                PreviousValue = "{\"channel\":\"PHONE\",\"result\":\"NO_ANSWER\"}",
+                NewValue = "{\"channel\":\"PHONE\",\"result\":\"SUCCESSFUL_CONTACT\"}"
+            }
+        };
+
+        _contactRepoMock
+            .Setup(r => r.GetAuditByPatientIdAsync(patientId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(logs);
+
+        // Act
+        var result = await _contactService.GetAuditByPatientIdAsync(patientId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result.First().Reason.Should().Be("Corrección de resultado de contacto reportado erróneamente");
+        result.First().ChangedByName.Should().Be("Gestor Clínico");
+    }
+
+    [Fact]
+    public async Task CA3_GetContactAuditByContactId_ReturnsAuditLogs()
+    {
+        // Arrange
+        var contactId = Guid.NewGuid();
+        var changedBy = Guid.NewGuid();
+
+        var logs = new List<ContactAuditLog>
+        {
+            new ContactAuditLog
+            {
+                Id = Guid.NewGuid(),
+                ContactId = contactId,
+                ChangedBy = changedBy,
+                ChangedByName = "Gestor Clínico",
+                ChangedAt = DateTime.UtcNow,
+                Reason = "Registro inicial de contacto con paciente",
+                PreviousValue = "{}",
+                NewValue = "{\"channel\":\"PHONE\",\"result\":\"SUCCESSFUL_CONTACT\"}"
+            }
+        };
+
+        _contactRepoMock
+            .Setup(r => r.GetAuditByContactIdAsync(contactId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(logs);
+
+        // Act
+        var result = await _contactService.GetAuditByContactIdAsync(contactId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(1);
+        result.First().Reason.Should().Be("Registro inicial de contacto con paciente");
+    }
 }

@@ -65,19 +65,33 @@
     <!-- CONTACTABILIDAD OBLIGATORIA (E.164 Y CORREO) -->
     <div class="form-row">
       <div class="form-group">
-        <label for="phone" class="form-label">
+        <label for="phoneNumber" class="form-label">
           Teléfono Principal (E.164) <span class="required">*</span>
         </label>
-        <input
-          id="phone"
-          type="text"
-          class="form-control"
-          formControlName="phone"
-          placeholder="+573001234567"
-        />
-        <span class="form-hint">Obligatorio con prefijo internacional (+57, +51 o +593).</span>
-        @if (form.get('phone')?.invalid && form.get('phone')?.touched) {
-          <div class="form-error">Formato E.164 obligatorio (Ej: +573001234567).</div>
+        <div class="phone-input-group">
+          <select
+            id="phonePrefix"
+            class="form-select phone-prefix-select"
+            formControlName="phonePrefix"
+            (change)="onPhonePrefixChange($event)"
+            title="Seleccionar indicativo del país"
+          >
+            @for (c of countries; track c.code) {
+              <option [value]="c.prefix">{{ c.flag }} {{ c.prefix }} ({{ c.code }})</option>
+            }
+          </select>
+          <input
+            id="phoneNumber"
+            type="tel"
+            class="form-control phone-number-input"
+            formControlName="phoneNumber"
+            placeholder="Ej: 3001234567"
+            maxlength="12"
+          />
+        </div>
+        <span class="form-hint">Número E.164: <strong>{{ form.get('phonePrefix')?.value }}{{ form.get('phoneNumber')?.value || '...' }}</strong></span>
+        @if (form.get('phoneNumber')?.invalid && form.get('phoneNumber')?.touched) {
+          <div class="form-error">Debe ingresar un número de teléfono válido (7 a 12 dígitos numéricos).</div>
         }
       </div>
 

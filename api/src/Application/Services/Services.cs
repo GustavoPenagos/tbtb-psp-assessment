@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using FluentValidation;
 using Application.DTOs;
 using Application.Interfaces;
@@ -180,6 +180,18 @@ public class ContactService : IContactService
             RegisteredBy = request.ChangedBy,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    public async Task<IEnumerable<AuditLogResponseDto>> GetAuditByPatientIdAsync(Guid patientId, CancellationToken cancellationToken = default)
+    {
+        var logs = await _contactRepository.GetAuditByPatientIdAsync(patientId, cancellationToken);
+        return _mapper.Map<IEnumerable<AuditLogResponseDto>>(logs);
+    }
+
+    public async Task<IEnumerable<AuditLogResponseDto>> GetAuditByContactIdAsync(Guid contactId, CancellationToken cancellationToken = default)
+    {
+        var logs = await _contactRepository.GetAuditByContactIdAsync(contactId, cancellationToken);
+        return _mapper.Map<IEnumerable<AuditLogResponseDto>>(logs);
     }
 }
 
