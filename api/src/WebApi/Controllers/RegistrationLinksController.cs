@@ -7,14 +7,10 @@ namespace WebApi.Controllers;
 [ApiController]
 [Route("api/registration-links")]
 [Produces("application/json")]
-public class RegistrationLinksController : ControllerBase
+[Tags("3. Enlaces y Autorregistro (CA-1)")]
+public class RegistrationLinksController(IRegistrationService registrationService) : ControllerBase
 {
-    private readonly IRegistrationService _registrationService;
-
-    public RegistrationLinksController(IRegistrationService registrationService)
-    {
-        _registrationService = registrationService;
-    }
+    private readonly IRegistrationService _registrationService = registrationService;
 
     /// <summary>
     /// CA-1 Variante: Gestor genera enlace con token criptográfico temporal.

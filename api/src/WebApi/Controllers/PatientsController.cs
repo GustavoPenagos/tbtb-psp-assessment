@@ -7,14 +7,10 @@ namespace WebApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class PatientsController : ControllerBase
+[Tags("1. Pacientes (CA-1 / CA-3)")]
+public class PatientsController(IPatientService patientService) : ControllerBase
 {
-    private readonly IPatientService _patientService;
-
-    public PatientsController(IPatientService patientService)
-    {
-        _patientService = patientService;
-    }
+    private readonly IPatientService _patientService = patientService;
 
     /// <summary>
     /// CA-1: Registro de paciente por gestor (multi-país CO/PE/EC).

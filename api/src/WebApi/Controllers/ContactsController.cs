@@ -7,14 +7,10 @@ namespace WebApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class ContactsController : ControllerBase
+[Tags("2. Contactos e Interacciones (CA-2 / CA-3)")]
+public class ContactsController(IContactService contactService) : ControllerBase
 {
-    private readonly IContactService _contactService;
-
-    public ContactsController(IContactService contactService)
-    {
-        _contactService = contactService;
-    }
+    private readonly IContactService _contactService = contactService;
 
     /// <summary>
     /// CA-2: Registrar interacción con paciente en estado ACTIVE.
