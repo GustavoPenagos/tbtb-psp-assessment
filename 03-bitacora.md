@@ -1,4 +1,4 @@
-﻿# 03 — Trazabilidad y Bitácora de Decisiones
+# 03 — Trazabilidad y Bitácora de Decisiones
 
 **Programa:** Acompañamiento a Pacientes (PSP)  
 **Autor:** Gustavo Penagos  
@@ -68,6 +68,25 @@
     AND c.contact_date >= @StartDate AND c.contact_date < @EndDate
   ORDER BY c.contact_date DESC;
   ```
-- **Justificación de índices con volumen real (~100.000+ contactos):**
-  - Se implementa el índice compuesto `IX_contacts_gestor_date (registered_by, contact_date) INCLUDE (patient_id, channel, result, is_active)`.
   - Con este índice, SQL Server realiza un *Index Seek* directo por el gestor y rango de fechas, evitando el costoso *Clustered Index Scan* y eliminando la necesidad de un operador de ordenamiento en memoria (*Sort*). La unión con `patients` y `users` se resuelve mediante *Nested Loops* o *Hash Match* sobre sus claves primarias agrupadas.
+
+### Decisión 7 — Auditoría simétrica para edición de datos maestros de paciente (`patient_audit_log`)
+- **Propuesto por:** Desarrollador.
+- **Decisión del desarrollador:** Aceptada e incorporada.
+- **Motivo de la decisión:** Si bien CA-3 aborda formalmente la corrección de contactos, en la operación diaria del programa los pacientes cambian de teléfono, correo o ciudad. En un entorno farmacéutico GxP, cualquier mutación de datos de salud debe preservar su estado anterior. Se implementó la tabla `patient_audit_log` y el Stored Procedure transaccional `sp_UpdatePatientWithAudit`, exigiendo una justificación obligatoria $\ge 10$ caracteres y registrando el snapshot JSON antes y después del cambio.
+
+---
+
+## 3. Matriz de Cumplimiento de Buenas Prácticas y Restricciones del PDF
+
+| Buena Práctica / Regla del PDF | Criterio de Auditoría | Evidencia en el Repositorio | Estado |
+| :--- | :--- | :--- | :--- |
+| **1. Tope Estricto de Alcance** | Cumplir con el límite estricto de máximo 2 a 3 CAs (Pág. 4 del PDF) para priorizar profundidad sobre superficialidad. | Alcance cerrado exclusivamente a CA-1 y CA-2 de punta a punta, más el patrón de auditoría inmutable de CA-3. CA-4, CA-5 y CA-6 quedan excluidos formalmente con justificación técnica y matemática en `02-plan.md`. | **Cumplido** |
+| **2. Secuencia Histórica de Commits** | El commit de `01-hallazgos.md` y `02-plan.md` debe ser anterior a cualquier código o script (Pág. 3). | Commit inicial `54b9ada` registra exclusivamente los documentos de análisis antes de la creación de scripts o código fuente. | **Cumplido** |
+| **3. Persistencia Versionada** | Esquema creado con scripts `.sql` numerados en `scripts/`, nunca desde herramienta gráfica (Pág. 4). | `scripts/01_schema.sql`, `02_stored_procedures.sql` y `03_seed.sql` versionados e idempotentes. | **Cumplido** |
+| **4. Separación de Responsabilidades** | La lógica de negocio no vive en el controlador ni en el componente (Pág. 4). | Lógica encapsulada en Stored Procedures transaccionales y en la capa de servicios de aplicación. Componentes desacoplados. | **Cumplido** |
+| **5. Consumo por Servicio Inyectado** | Prohibidas llamadas directas a `HttpClient` desde componentes de Angular (Pág. 4). | Todo consumo de la API REST se realiza a través de servicios inyectados (`PatientService`, `ContactService`). | **Cumplido** |
+| **6. Tipado Estricto (Zero `any`)** | Prohibido el uso de `any` en TypeScript y `dynamic` en C# para garantizar robustez y trazabilidad. | `"noImplicitAny": true` activo en Angular. Interfaces tipadas para requests y responses. DTOs propios en .NET 8 sin exponer entidades de BD. | **Cumplido** |
+| **7. Seguridad OWASP (CORS, SQLi, XSS)** | Mitigación activa contra inyecciones y accesos no autorizados. | CORS restrictivo por configuración, 100% de consultas parametrizadas con Stored Procedures, sanitización de entrada y cero uso de `[innerHTML]`. | **Cumplido** |
+| **8. Manejo de Errores Visible** | Error tratado de punta a punta desde la BD/API hasta la pantalla del usuario (Pág. 4). | Excepciones capturadas con `ProblemDetails` (RFC 7807) en el backend y desplegadas en notificaciones visuales legibles en frontend. | **Cumplido** |
+| **9. Datos de Prueba (Seed Data)** | Script para probar la solución sin inventar datos (Pág. 4). | `scripts/03_seed.sql` con usuarios gestores, pacientes iniciales, contactos y generador opcional de 400 pacientes. | **Cumplido** |

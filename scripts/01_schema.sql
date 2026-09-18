@@ -128,6 +128,27 @@ BEGIN
 END;
 GO
 
+-- ----------------------------------------------------------------------------
+-- 6. TABLA: patient_audit_log (Registro inmutable de auditoría para cambios de pacientes)
+-- ----------------------------------------------------------------------------
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'patient_audit_log')
+BEGIN
+    CREATE TABLE dbo.patient_audit_log (
+        id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+        patient_id      UNIQUEIDENTIFIER NOT NULL,
+        changed_by      UNIQUEIDENTIFIER NOT NULL,
+        changed_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        reason          NVARCHAR(300)    NOT NULL,
+        previous_value  NVARCHAR(MAX)    NOT NULL,
+        new_value       NVARCHAR(MAX)    NOT NULL,
+
+        CONSTRAINT PK_patient_audit_log PRIMARY KEY CLUSTERED (id),
+        CONSTRAINT FK_patient_audit_patient FOREIGN KEY (patient_id) REFERENCES dbo.patients (id),
+        CONSTRAINT FK_patient_audit_changed_by FOREIGN KEY (changed_by) REFERENCES dbo.users (id)
+    );
+END;
+GO
+
 -- ============================================================================
 -- ÍNDICES DE RENDIMIENTO E INTEGRIDAD
 -- ============================================================================
@@ -181,5 +202,13 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_contacts_gestor_date
     ON dbo.contacts (registered_by, contact_date)
     INCLUDE (patient_id, channel, result, is_active);
+END;
+GO
+
+-- Índice para historial de auditoría de pacientes ordenado por fecha
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_patient_audit_log_patient_date' AND object_id = OBJECT_ID('dbo.patient_audit_log'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_patient_audit_log_patient_date
+    ON dbo.patient_audit_log (patient_id, changed_at DESC);
 END;
 GO

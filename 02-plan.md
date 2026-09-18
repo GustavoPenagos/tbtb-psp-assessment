@@ -426,3 +426,45 @@ Adopto la estrategia **Server Wins with Audit Trail**, que es coherente con el p
 3. **Las correcciones de contacto (CA-3) no se permiten en modo offline**: modificar un contacto ya guardado requiere verificar el estado actual en el servidor y generar el `audit_log` en tiempo real. La UI muestra el botón de corrección deshabilitado cuando no hay conexión, con el mensaje "Requiere conexión para mantener la trazabilidad del registro".
 
 Este diseño garantiza que no se pierden contactos registrados offline y que la regla de auditoría inmutable no puede violarse desde el dispositivo móvil.
+
+---
+
+## 8. Políticas de Seguridad OWASP y Tipado Fuerte (Cero Tolerancia a `any`)
+
+### A. Política CORS Restrictiva (.NET 8 WebApi)
+- Configurada explícitamente en `Program.cs` y parametrizada vía `appsettings.json`.
+- Prohibición absoluta de `.AllowAnyOrigin()`. Solo se admiten orígenes autorizados del frontend (`http://localhost:4200`). Métodos limitados a `GET`, `POST`, `PUT`, `OPTIONS`.
+
+### B. Mitigación contra Inyección SQL (CWE-89)
+- Todas las operaciones de modificación y consulta transaccional se ejecutan mediante Stored Procedures con parámetros fuertemente tipados (`DynamicParameters` en Dapper o LINQ compilado en EF Core).
+- Cero concatenación de cadenas en consultas a base de datos.
+
+### C. Prevención de Inyección HTML y XSS (CWE-79)
+- **Backend:** Sanitización activa de cadenas de texto libre (`reason`, `notes`, `full_name`, `city`) para neutralizar tags maliciosos (`<script>`, `<iframe>`, etc.) antes de persistir.
+- **Frontend Angular:** Prohibido el uso de `[innerHTML]`. Toda interpolación se realiza mediante data-binding seguro contextual (`{{ }}`).
+
+### D. Política Estricta de Tipado Fuerte (CERO Tolerancia a `any`)
+- **TypeScript / Angular 18:** Prohibido el uso de `any` en todo el proyecto (`noImplicitAny: true` en `tsconfig.json`). Todo formulario reactivo está fuertemente tipado (`FormGroup<T>`), los servicios retornan tipos concretos (`Observable<T>`) y los interceptores capturan errores bajo la interfaz `ProblemDetails`. Si un tipo es desconocido en interceptores, usar `unknown` con type guards.
+- **C# / .NET 8:** Contextos nulos habilitados (`<Nullable>enable</Nullable>`). Prohibido el uso de `dynamic` u `object` no tipado en DTOs, controladores y repositorios. Respuestas HTTP explícitas con `ActionResult<T>`.
+
+### E. Auditoría Simétrica de Pacientes (`patient_audit_log`)
+- Para garantizar el cumplimiento GxP en todas las entidades maestras, la actualización de datos de pacientes (teléfono, correo, ciudad, estado) se gestiona de forma análoga a CA-3 a través del SP transaccional `sp_UpdatePatientWithAudit`, registrando snapshots JSON del estado anterior y nuevo, usuario y justificación obligatoria ($\ge 10$ caracteres).
+
+### Registro Forense de Errores en Archivo Físico (`E:\logs`)
+* **Ubicación:** Todo error derivado de fallas de conexión o ejecución en base de datos (`SqlException`, fallas de Stored Procedures) o excepciones no controladas en la lógica de negocio se registrará de forma persistente y thread-safe en el directorio `E:\logs` (configurable vía `appsettings.json:Logging:FileLogging:Directory`).
+* **Estructura Forense GxP:** Cada entrada registrará: Timestamp UTC, Endpoint, Método HTTP, TraceId, Tipo de Excepción, Mensaje detallado y Stack Trace completo.
+* **Respuesta Sanitizada al Cliente:** Hacia el exterior (cliente HTTP) se retorna estrictamente un objeto RFC 7807 (`ProblemDetails`) con código 500 y un mensaje genérico para mitigar fugas de información técnica sensible (CWE-209).
+
+### REGLAS OBLIGATORIAS ADICIONALES:
+
+1. **LOGGING FORENSE DE BASE DE DATOS Y NEGOCIO (.NET 8):**
+   - Configurar `FileLoggerService` para que capture cualquier falla de acceso a datos (SQL Server, errores en Stored Procedures) o errores no controlados del negocio, escribiendo de forma síncrona/thread-safe en `E:\logs\logs_TBTB.PSP.text`. 
+   - El path `E:\logs` debe ser configurable en `appsettings.json`.
+   - El cliente HTTP solo debe recibir un `ProblemDetails` sanitizado (HTTP 500).
+
+2. **DESACOPLAMIENTO OBLIGATORIO DE VISTAS EN ANGULAR 18:**
+   - Prohibido código HTML o CSS embebido en el archivo `.ts`.
+   - Cada componente debe constar estrictamente de su tríada desacoplada:
+     - `*.component.html`
+     - `*.component.ts`
+     - `*.component.scss`

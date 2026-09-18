@@ -129,6 +129,110 @@ BEGIN
 END;
 GO
 
+-- ----------------------------------------------------------------------------
+-- SP: sp_UpdatePatientWithAudit (Actualización con auditoría obligatoria GxP)
+-- ----------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE dbo.sp_UpdatePatientWithAudit
+    @PatientId   UNIQUEIDENTIFIER,
+    @Phone       NVARCHAR(20),
+    @Email       NVARCHAR(150),
+    @City        NVARCHAR(100),
+    @Status      NVARCHAR(20),
+    @Reason      NVARCHAR(300),
+    @ChangedBy   UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Validar justificación regulatoria
+        IF @Reason IS NULL OR LEN(LTRIM(RTRIM(@Reason))) < 10
+        BEGIN
+            THROW 50020, 'Reason for change is mandatory and must be at least 10 characters.', 1;
+        END;
+
+        -- Validar que el paciente existe
+        DECLARE @OldPhone NVARCHAR(20), @OldEmail NVARCHAR(150), @OldCity NVARCHAR(100), @OldStatus NVARCHAR(20);
+        SELECT @OldPhone = phone, @OldEmail = email, @OldCity = city, @OldStatus = status
+        FROM dbo.patients
+        WHERE id = @PatientId;
+
+        IF @OldEmail IS NULL
+        BEGIN
+            THROW 50002, 'Patient does not exist.', 1;
+        END;
+
+        -- Validar unicidad de email si cambió
+        IF @Email <> @OldEmail AND EXISTS (SELECT 1 FROM dbo.patients WHERE email = @Email AND id <> @PatientId)
+        BEGIN
+            THROW 50004, 'Patient with this email address already exists.', 1;
+        END;
+
+        -- Validar unicidad de teléfono si cambió
+        IF @Phone IS NOT NULL AND (@OldPhone IS NULL OR @Phone <> @OldPhone) 
+           AND EXISTS (SELECT 1 FROM dbo.patients WHERE phone = @Phone AND id <> @PatientId)
+        BEGIN
+            THROW 50005, 'Patient with this phone number already exists.', 1;
+        END;
+
+        -- Construir snapshots JSON
+        DECLARE @PrevJson NVARCHAR(MAX) = (
+            SELECT @OldPhone AS phone, @OldEmail AS email, @OldCity AS city, @OldStatus AS status
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        DECLARE @NewJson NVARCHAR(MAX) = (
+            SELECT @Phone AS phone, @Email AS email, @City AS city, @Status AS status
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        );
+
+        -- Registrar traza inmutable en patient_audit_log
+        INSERT INTO dbo.patient_audit_log (
+            id, patient_id, changed_by, changed_at, reason, previous_value, new_value
+        )
+        VALUES (
+            NEWSEQUENTIALID(), @PatientId, @ChangedBy, SYSUTCDATETIME(), @Reason, @PrevJson, @NewJson
+        );
+
+        -- Actualizar datos del paciente
+        UPDATE dbo.patients
+        SET phone = @Phone,
+            email = @Email,
+            city = @City,
+            status = @Status,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @PatientId;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- ----------------------------------------------------------------------------
+-- SP: sp_GetPatientAuditHistory (Consulta de trazabilidad inmutable de paciente)
+-- ----------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE dbo.sp_GetPatientAuditHistory
+    @PatientId UNIQUEIDENTIFIER
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT a.id, a.patient_id, a.changed_by, u.name AS changed_by_name,
+           a.changed_at, a.reason, a.previous_value, a.new_value
+    FROM dbo.patient_audit_log a
+    INNER JOIN dbo.users u ON a.changed_by = u.id
+    WHERE a.patient_id = @PatientId
+    ORDER BY a.changed_at DESC;
+END;
+GO
+
 -- ============================================================================
 -- 2. AUTORREGISTRO EN 2 PASOS (CA-1 VARIANTE)
 -- ============================================================================
